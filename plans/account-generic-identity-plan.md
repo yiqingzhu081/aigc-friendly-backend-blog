@@ -270,6 +270,15 @@
 
 ### P1：架构治理先对齐
 
+当前产出：
+
+- `AGENTS.md`
+- `docs/api/graphql-error-contract-current.md`
+- `docs/common/boundary-contract.rules.md`
+- `docs/common/eslint-architecture-rules.md`
+- `docs/README.md` 路由更新
+- `npm run typecheck` 已通过
+
 目标：先补齐或修正当前项目的架构治理规则，避免在旧规则下继续修改账号模型。
 
 范围：

@@ -14,9 +14,22 @@
 
   Before applying multiple rule documents, read `docs/common/rule-precedence.rules.md` first.
 
+  ## Global GraphQL Error Contract
+
+  - Every GraphQL interface must follow `docs/api/graphql-error-contract-current.md`.
+  - AI agents must read it before changing GraphQL adapters, guards, exception filters, auth/session flows, or frontend-facing API docs.
+  - `errors[].extensions.code === 'UNAUTHENTICATED'` is the stable frontend runtime signal for auth/session failure.
+  - Frontend must not depend on `extensions.errorCode` for production runtime branching; it may be hidden or omitted.
+
   ## Route By Task
 
+  - GraphQL error/auth/session response contract:
+    - `docs/api/graphql-error-contract-current.md`
+    - `docs/api/adapters.rules.md`
+
   - Layer boundaries:
+    - `docs/common/eslint-architecture-rules.md` when you need the lint rule map or validation command
+    - `docs/common/boundary-contract.rules.md`
     - `docs/common/core.rules.md`
     - `docs/common/modules.rules.md`
     - `docs/common/modules.extra.rules.md`
@@ -28,6 +41,9 @@
   - QueryService or type placement:
     - `docs/common/queryservice.rules.md`
     - `docs/common/type.rules.md`
+
+  - Boundary contract or port/contract naming:
+    - `docs/common/boundary-contract.rules.md`
 
   - Input normalization:
     - `docs/project-convention/input-field-design.md`
@@ -62,6 +78,8 @@
   ## One-Line Meanings
 
   - `core.rules`: pure domain only
+  - `eslint-architecture-rules.md`: executable lint rule map and architecture validation commands
+  - `boundary-contract.rules`: layer-owned contract naming and port/contract distinction
   - `modules.rules`: reusable same-domain services only
   - `modules.extra.rules`: optional but common modules(service) practices
   - `usecase.rules`: orchestration and transaction ownership
@@ -84,3 +102,4 @@
   - `worker-usecase.rules.md`: worker usecase boundary
   - `email-worker-delivery.rules.md`: email delivery runtime boundary
   - `skills.rules.md`: skill authoring and usage
+  - `graphql-error-contract-current.md`: global GraphQL error/auth runtime contract for every interface

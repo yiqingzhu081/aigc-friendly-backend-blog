@@ -20,7 +20,7 @@ P0 已完成。
 
 ## AGENTS.md 差异
 
-当前项目根目录没有 `AGENTS.md`。
+P0 初扫时，当前项目根目录没有 `AGENTS.md`。
 
 新项目 `AGENTS.md` 值得纳入本项目治理，但不建议在 P0 直接原样复制。原因是它引用了当前项目尚未
 具备的规则文档，直接落地会让后续 agent 先读到不存在的路径。
@@ -39,6 +39,13 @@ P0 判断：
   - 先补齐其引用的最小规则文档。
   - 或创建当前项目专用 `AGENTS.md`，只引用已存在规则，并把缺失规则列为 P1 followup。
 
+P1 更新：
+
+- 已创建当前项目专用 `AGENTS.md`。
+- 已补齐 `docs/api/graphql-error-contract-current.md`、
+  `docs/common/boundary-contract.rules.md`、
+  `docs/common/eslint-architecture-rules.md`。
+
 ## Docs 差异
 
 当前项目已有：
@@ -55,7 +62,7 @@ P0 判断：
 - `docs/api/adapters.rules.md`
 - worker、queue、input、time、database baseline、e2e 等基础规则
 
-相对新项目缺失的重点规则：
+P0 初扫时，相对新项目缺失的重点规则：
 
 - GraphQL error/auth/session contract
 - boundary contract naming rule
@@ -69,6 +76,12 @@ P0 判断：
   文件命名、依赖方向和验证命令。
 - GraphQL error/auth/session contract 会影响 auth/session 改造，P1 或 P4 前必须补齐。
 - 教育域相关 current API 文档不应从新项目带入。
+
+P1 更新：
+
+- GraphQL error/auth/session contract 已补齐。
+- boundary contract naming rule 已补齐。
+- ESLint architecture rule map 已补齐，并按当前项目真实 ESLint 覆盖范围标注未覆盖项。
 
 ## 培训班语义影响面
 
