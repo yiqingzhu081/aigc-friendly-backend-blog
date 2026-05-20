@@ -32,6 +32,34 @@ performs an automatic `--fix` pass.
   This is still coarser than the target governance model; use the review rules below for uncovered
   aggregate, entity, QueryService, boundary contract, and transaction details.
 
+- `local-architecture/no-boundary-port-naming-drift`
+  Blocks new `*.port.ts` / `*.ports.ts` boundary files and imports.
+  Also blocks `TransactionPort` / `UnitOfWork` naming drift.
+  Current legacy core `pagination/search/sort` `.ports.ts` files are allowlisted until P3 migration.
+
+- `local-architecture/no-transaction-manager-alias`
+  Blocks new local `*TransactionManager` aliases/interfaces in usecases and modules.
+  Current legacy aliases in account, verification-record, and async-task-record are allowlisted until
+  transaction boundary migration.
+
+- `local-architecture/no-usecase-transaction-manager-orm-api`
+  Blocks usecases from directly calling ORM APIs on transaction contexts, such as `save`,
+  `getRepository`, `createQueryBuilder`, `insert`, `update`, `delete`, and `query`.
+
+- `local-architecture/no-infrastructure-to-modules-imports`
+  Blocks infrastructure importing `src/modules/**` implementation files.
+  Module-owned contract exceptions are not modeled in the old project yet; if module-owned contracts
+  are introduced, update this rule and this document together.
+
+- `local-architecture/no-cross-domain-usecases-imports`
+  Blocks usecases importing other usecase bounded contexts.
+  Same-domain usecase module wiring remains allowed.
+
+- `local-architecture/no-types-to-core-imports`
+  Blocks `src/types/**` from importing `src/core/**`.
+  Current `src/types/errors/exception-payload.types.ts` is allowlisted as legacy debt until error
+  response type placement is cleaned up.
+
 - `no-restricted-imports`
   Blocks direct `src/types/**`, `@src/types/**`, and `**/src/types/**` imports.
   Shared global types must use `@app-types/*`.
@@ -56,20 +84,33 @@ performs an automatic `--fix` pass.
 
 These rules are documented review rules in the current project unless and until matching lint rules are added:
 
-- Boundary contract naming drift for new `*.port.ts` / `*.ports.ts` files.
-- New `TransactionPort` / `UnitOfWork` naming drift.
-- New `*TransactionManager` aliases.
-- Direct usecase transaction-context ORM API calls.
-- Cross-domain usecase imports beyond the current coarse `boundaries/dependencies` model.
 - Module-owned `*.contract.ts` exceptions and detailed contract dependency modeling.
 - Aggregate child-entity direct writes outside the aggregate root entry.
 - ORM Entity purity, including accidental GraphQL / HTTP / Swagger / adapter decorators.
 - Adapter type-only import exceptions for bounded-context root `*.types.ts`.
 - QueryService depending on mixed read/write services.
+- Cross-domain modules imports.
 - Infrastructure runtime contract naming drift such as BullMQ payload files using layer boundary
   `*.contract.ts` naming.
 
 Do not treat missing lint coverage as permission to violate the docs.
+
+## Supplemental Scans
+
+Run these when preparing P3a inventory or reviewing architecture-sensitive patches.
+
+- Types importing core:
+  `rg -n "from ['\"](@src/|src/)?core/|from ['\"]@core/|import\\(['\"](@src/|src/)?core/|require\\(['\"](@src/|src/)?core/" src/types -g '*.ts'`
+- Boundary port / transaction alias drift:
+  `rg -n "type\\s+\\w*TransactionManager\\s*=|interface\\s+\\w*TransactionManager|TransactionPort|UnitOfWork|\\.ports?\\.ts|from ['\"].*\\.ports?|transaction-runner\\.port" src -g '*.ts'`
+- Cross-domain modules imports:
+  `rg -n "from ['\"](@src/modules/|@modules/|src/modules/)" src/modules -g '*.ts'`
+- ORM Entity adapter decorators:
+  `rg -n "@(ObjectType|Field|InputType|ArgsType|InterfaceType)|@ApiProperty|@nestjs/graphql|@nestjs/swagger|class-validator|class-transformer" src/modules src/core src/infrastructure -g '*entity.ts' -g '*.entity.ts'`
+- QueryService depending on mixed read/write services:
+  `rg -n "from ['\"].*(\\.service|/services/|@modules/|@src/modules/)" src/modules -g '*query.service.ts'`
+- Usecase direct ORM calls on transaction-like values are enforced by ESLint; broad text scans for
+  `.update()` or `.query()` are noisy and should not be used as the primary signal.
 
 ## Notes
 

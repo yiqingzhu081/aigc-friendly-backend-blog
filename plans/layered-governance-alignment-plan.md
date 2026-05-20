@@ -212,6 +212,22 @@ P0 决策闸口：
 
 ### P2：架构验证口径对齐
 
+当前产出：
+
+- [layered-governance-p2-validation.md](./layered-governance-p2-validation.md)
+- `eslint.config.mjs` 已参考新项目 local architecture lint，迁入可安全落地的规则。
+- `docs/common/eslint-architecture-rules.md` 已更新自动覆盖、legacy 白名单、补充扫描命令与人工
+  review 边界。
+
+验证：
+
+- `npm run typecheck` 通过。
+- `npx eslint "{src,apps,libs,test}/**/*.ts" --cache --cache-location .eslintcache` 通过。
+- `git diff --check` 通过。
+- 额外执行 `npm run lint:usecase-normalize-guard`，当前因既有
+  `src/usecases/account/fetch-user-info.usecase.ts` 手工 filter / Set 去重失败。
+  该问题不是 P2 新增架构 lint 导致，已记录到 P2 validation，后续可单独收口。
+
 目标：让旧项目的可执行验证方式和新项目治理文档一致。
 
 范围：
