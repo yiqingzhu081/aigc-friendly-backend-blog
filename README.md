@@ -1,4 +1,4 @@
-# AIGC Friendly Architecture Backend
+# AIGC Friendly Backend Framework
 
 ## Start Here
 
@@ -9,15 +9,15 @@ For AI/Agent: read `docs/README.md` first.
 ![NestJS](https://img.shields.io/badge/framework-NestJS-E0234E.svg)
 ![Node](https://img.shields.io/badge/node-%3E%3D18-green.svg)
 
-基于 NestJS + TypeScript 的后端 API 项目，当前以 GraphQL 为主入口，使用 MySQL + TypeORM，并遵循严格的分层架构约束。
+基于 NestJS + TypeScript 的后端基础框架，当前以 GraphQL 为主入口，使用 MySQL + TypeORM，并遵循严格的分层架构约束。
 
 ## 💡 核心理念：AIGC Friendly
 
-本项目专为 **AI 辅助编程（Copilot / Agent）** 场景优化，旨在提供一个 AI 容易理解、维护与扩展的架构模版：
+本项目专为 **AI 辅助编程（Copilot / Agent）** 场景优化，旨在提供一个 AI 容易理解、维护与扩展的后端框架基线：
 
 - **清晰的上下文边界**：Adapters / Usecases / Core / Infrastructure 分层明确，AI 容易定位代码职责。
 - **显式的依赖规则**：严格的单向依赖约束，减少 AI 生成循环依赖或错误引用的概率。
-- **规范化的读写分离**：Query Service (读) 与 Usecases (写) 分离，便于 AI 识别副作用与事务边界。
+- **规范化的读写分离**：QueryService (读) 与 Usecases (写) 分离，便于 AI 识别副作用与事务边界。
 - **自文档化代码**：通过显式的规则文档 (`docs/*.rules.md`) 与强类型约束，辅助 AI 进行更准确的代码生成。
 
 ## 目录
@@ -33,7 +33,9 @@ For AI/Agent: read `docs/README.md` first.
 
 ## 项目简介
 
-项目面向账号体系、身份管理与验证流程等业务场景，提供统一鉴权、分页 / 排序 / 搜索与错误映射能力，并内置基于 QM Worker 的 AI / Email 异步队列、任务审计与调试查询能力。它既是脚手架，也是一套经过实践验证的 DDD 轻量级落地实现。
+项目面向可复用后端基础设施与分层架构治理场景，提供账号与会话鉴权、分页 / 排序 / 搜索、错误映射、输入规范化、事务边界与数据库基线交付能力，并内置基于 QM Worker 的 AI / Email 异步队列、任务审计与调试查询能力。它既是可直接扩展的基础框架，也是一套经过实践验证的 DDD 轻量级落地实现。
+
+当前 `v1.2.0-framework-baseline` 版本已将具体业务域从默认模板中剥离，保留通用角色、账号、验证、队列与审计能力，适合作为新业务域的起始基线。
 
 ## 技术栈
 
@@ -43,9 +45,12 @@ For AI/Agent: read `docs/README.md` first.
 - **Database**: MySQL 8.0
 - **ORM**: TypeORM
 - **API Protocol**: GraphQL (Apollo Server)
+- **Queue**: BullMQ + Redis
+- **Auth**: Passport + JWT
 - **Logging**: Pino
 - **Configuration**: @nestjs/config
 - **Validation**: class-validator + class-transformer
+- **Testing**: Jest + Supertest
 
 ## 项目结构与架构
 
@@ -53,7 +58,9 @@ For AI/Agent: read `docs/README.md` first.
 
 ```text
 src/
-├── adapters/                    # 入口适配层（GraphQL / HTTP）
+├── adapters/                    # 入口适配层
+│   ├── api/graphql/             # GraphQL resolver / DTO / guard / schema registry
+│   └── worker/                  # BullMQ worker processor / handler / mapper
 ├── bootstraps/                  # 多入口启动层
 │   ├── api/
 │   │   ├── api.module.ts
@@ -61,12 +68,12 @@ src/
 │   └── worker/
 │       ├── worker.module.ts
 │       └── main.ts
-├── core/                        # 领域模型、纯规则、端口接口
+├── core/                        # 领域模型、纯规则、核心边界契约
 ├── infrastructure/              # 外部依赖实现（DB、配置、安全等）
 ├── modules/                     # 同域可复用服务（读写能力承载）
 ├── usecases/                    # 用例编排层（流程、事务、权限组合）
-├── types/                       # 跨层共享类型
-└── schema.graphql               # GraphQL schema 生成目标（按配置）
+├── types/                       # 稳定共享契约与枚举
+└── schema.graphql               # Nest autoSchemaFile 自动生成，非手写维护源
 ```
 
 ### 启动入口
@@ -84,20 +91,33 @@ src/
 
 ### 架构分层与依赖方向
 
-项目采用固定分层，并限制依赖方向（Strict Layered Architecture）：
+项目采用固定分层，并限制依赖方向（Strict Layered Architecture）。基础主链路是：
+
+```text
+adapters -> usecases -> modules -> infrastructure
+```
+
+`core` 与 `types` 是受限的稳定支撑层，不参与运行时编排。
 
 #### 1. 职责划分
 
-- **`adapters`**: 只做输入解析、权限接入与输出封装。
-- **`usecases`**: 负责编排写流程、事务边界与错误映射。
-- **`modules(service)`**: 承载同域可复用读写服务，提供 DTO / 只读视图，其中 **Query Service** 负责只读、权限判定与输出规范化。
-- **`infrastructure`**: 实现 `core` 端口并对接外部系统，不做业务编排。
-- **`core`**: 只保留领域规则、模型、值对象与端口抽象，不依赖任何外部框架。
+- **`adapters`**: 协议入口层。负责 GraphQL / HTTP 输入解析、认证上下文接入、调用 usecase、映射输出；不承载业务编排，不直接依赖 modules 或 infrastructure 的运行时实现。
+- **`usecases`**: 业务编排层。负责写流程、权限组合、事务入口、跨域协调与稳定输出装配。
+- **`modules`**: 同域可复用能力层。封装仓储、实体访问、同域服务与 QueryService；业务域 modules 不做跨域业务编排。
+- **`QueryService`**: modules 内的读侧模式。只读、判定读取可见性并规范化输出；由 usecase 调用，不作为 adapter 的直接入口。
+- **`infrastructure`**: 外部系统与运行时实现层。负责 TypeORM、BullMQ、Redis、配置、日志、SDK、邮件、GraphQL 运行时等实现细节。
+- **`core`**: 纯领域层。只放领域模型、值对象、纯规则、策略和 core-owned boundary contract；不读配置、不做 I/O、不依赖框架。
+- **`types`**: 全局稳定共享契约层。只放跨上下文共享类型与枚举，通过 `@app-types/*` 引用，不依赖 core、GraphQL、ORM 或框架。
+- **Boundary contract**: 不是独立分层，而是由拥有决策的层定义依赖边界；新增边界文件使用 `*.contract.ts`。
 
 #### 2. 依赖规则
 
-- **允许**: `adapters → usecases`, `usecases → modules | core`, `modules → infrastructure | core`, `infrastructure → core`
-- **禁止**: 反向依赖、跨层跳跃依赖（如 `adapters` 直接调 `infrastructure`）
+- **主链路**: `adapters -> usecases -> modules -> infrastructure`。
+- **稳定依赖**: `usecases`、`modules`、`infrastructure` 可在各自规则内依赖 `core` 与 `types`；`core` 只能依赖 core-local code 和允许的 `@app-types/*`；`types` 只能依赖 `types`。
+- **模块边界**: 业务域 modules 可依赖 `modules/common`，不得依赖其他业务域 modules；`modules/common` 不得依赖业务域 modules。
+- **用例边界**: `usecases -> usecases` 仅允许同域编排且一跳以内；跨域读写应上收到 usecase，而不是下沉到 modules 或 infrastructure。
+- **禁止方向**: 任何层不得依赖 `adapters`；adapters 不直接调用 modules / infrastructure；infrastructure 不拥有业务决策。
+- **共享类型**: 跨上下文稳定类型放在 `src/types` 并通过 `@app-types/*` 引用；同域稳定类型放在 `src/modules/<bounded-context>/<bounded-context>.types.ts`。
 
 #### 3. 详细规则
 
@@ -105,13 +125,18 @@ src/
 
 - [Core Rules](docs/common/core.rules.md)
 - [Adapters Rules](docs/api/adapters.rules.md)
+- [GraphQL Error Contract](docs/api/graphql-error-contract-current.md)
 - [Usecase Rules](docs/common/usecase.rules.md)
 - [Modules Rules](docs/common/modules.rules.md)
 - [Query Service Rules](docs/common/queryservice.rules.md)
+- [Boundary Contract Rules](docs/common/boundary-contract.rules.md)
+- [Type Rules](docs/common/type.rules.md)
 - [Infrastructure Rules](docs/common/infrastructure.rules.md)
+- [ESLint Architecture Rules](docs/common/eslint-architecture-rules.md)
 - [Queue Identifiers Rules](docs/common/queue-identifiers.rules.md)
 - [AI Task Lifecycle Audit Rules](docs/common/ai-task-lifecycle-audit.rules.md)
 - [QM Worker Integration Rules](docs/worker/qm-worker-integration.rules.md)
+- [Database Baseline Delivery Rules](docs/project-convention/database-baseline-delivery.rules.md)
 
 ## 功能概览
 
@@ -124,12 +149,14 @@ src/
 - ✅ **QM Worker Base**: 统一 AI / Email 队列接入、消费链路与模块装配模式
 - ✅ **AI Provider Call Record**: 记录 provider 调用链路、请求响应快照与耗时指标，支撑审计与排障
 
-### 业务域能力
+### 基础域能力
 
+- ✅ **Account**: 基础账号、UserInfo、密码与资料更新、可见性视图
 - ✅ **Auth**: 账号密码登录 / 第三方登录集成
 - ✅ **Registration**: 邮箱注册流程 / 第三方快捷注册
-- ✅ **Identity Management**: 通用角色管理 (admin / staff / guest / registrant)
-- ✅ **Verification**: 验证码生成与验证流程 (邀请、重置密码、绑定微信小程序)
+- ✅ **Role Baseline**: 通用角色与访问组基线 (ADMIN / STAFF / GUEST / REGISTRANT)
+- ✅ **Third-party Account**: 第三方身份解析、绑定、解绑与微信小程序辅助能力
+- ✅ **Verification**: 验证码生成与验证流程 (重置密码、绑定第三方身份等基础验证类型)
 - ✅ **AI Queue & Worker**: 支持 `queueAiGenerate` / `queueAiEmbed` 入队与 provider 路由消费
 - ✅ **Async Task Audit**: 支持按 `traceId` / 业务锚点 / 队列任务标识进行调试查询
 
@@ -139,7 +166,7 @@ src/
 
 - Node.js >= 18
 - MySQL >= 8.0
-- npm / yarn / pnpm
+- npm
 
 ### 安装与运行
 
@@ -153,7 +180,7 @@ src/
 
    ```bash
    cp env/.env.example env/.env.development
-   # 编辑 env/.env.development 填入数据库配置
+   # 编辑 env/.env.development，填入数据库、JWT、字段加密、分页签名等必要配置
    ```
 
 3. **启动应用**
@@ -165,8 +192,14 @@ src/
    # 开发模式（Worker）
    npm run dev:worker
 
-   # 生产模式（API）
+   # 构建生产产物
+   npm run build
+
+   # 生产模式（API，依赖 dist）
    npm run start:prod
+
+   # 生产模式（Worker，依赖 dist，需要 Redis / BullMQ 配置）
+   npm run start:worker
    ```
 
 ### 生产部署日志目录要求
@@ -188,6 +221,9 @@ npm run lint
 
 # TypeScript 类型检查
 npm run typecheck
+
+# 构建 API 入口
+npm run build
 ```
 
 ### 测试策略
@@ -196,23 +232,36 @@ npm run typecheck
 # 单元测试 (Unit Test)
 npm run test:unit
 
-# 端到端测试 (E2E Test)
-npm run test:e2e
-
-# 测试覆盖率
+# 单元测试覆盖率
 npm run test:cov
+
+# Core E2E：GraphQL / Auth / Account / Verification / Pagination 等基础 API
+npm run test:e2e:core
+
+# Worker E2E：Email / AI 队列入队、消费与审计链路
+npm run test:e2e:worker
+
+# 指定单个 E2E 文件
+npm run test:e2e:file -- test/01-auth/auth.e2e-spec.ts
+
+# 真实第三方 smoke，需要外部密钥与服务可用
+npm run test:e2e:smoke
 ```
 
 - 真实第三方受控 Smoke 单独放在 `test/99-third-party-live-smoke/`
+- E2E 默认读取 `env/.env.e2e`，会按测试组清理目标 MySQL 测试库与 Redis DB。
 
 ### 基础 CI 能力（空库 migration 演练）
 
 ```bash
-# 默认演练：创建临时库，执行 baseline migrations，校验后清理
+# 默认演练：读取演练环境的 DB_NAME，清空目标库后执行 baseline migrations
 npm run migration:drill:empty-db
 
 # 首次建表：落到指定数据库（会先清空目标库）
 MIGRATION_DRILL_DATABASE=<目标数据库名> MIGRATION_DRILL_ALLOW_NON_TEST_DB=true npm run migration:drill:empty-db
+
+# 临时库演练：要求数据库账号具备 CREATE/DROP DATABASE 权限
+MIGRATION_DRILL_CREATE_TEMP_DB=true npm run migration:drill:empty-db
 ```
 
 - 脚本会校验关键表、关键索引、关键外键，失败会返回非 0 退出码，可直接作为 CI 阻断项。
@@ -222,16 +271,21 @@ MIGRATION_DRILL_DATABASE=<目标数据库名> MIGRATION_DRILL_ALLOW_NON_TEST_DB=
 ### 开发约定
 
 - **写操作 (Command)**: 统一在 `usecases` 层编排，处理事务。
-- **读操作 (Query)**: 优先在 `modules` 层的 Query Service 实现，高性能且无副作用。
-- **外部依赖**: 必须通过 `infrastructure` 实现 `core` 定义的接口，禁止业务层直接依赖 SDK。
-- **GraphQL**: 副作用（如 Dataloader 注册）统一在 `src/adapters/api/graphql/schema/schema.init.ts` 管理。
+- **读操作 (Query)**: 优先在 `modules` 层的 QueryService 实现，由 usecase 调用并输出稳定视图。
+- **事务边界**: 由 usecase 通过 `TransactionRunner` 进入事务；usecase 不直接操作 TypeORM API。
+- **外部依赖**: 通过拥有决策的层定义 `*.contract.ts`，由 `infrastructure` 实现或适配，业务代码不直接依赖 SDK。
+- **共享类型**: 跨上下文稳定类型放在 `src/types`，通过 `@app-types/*` 引用。
+- **GraphQL**: DTO / Input / Args / Result 保持在 adapter 层；枚举、标量与 schema 初始化放在 `src/adapters/api/graphql/schema/`。
+- **ORM Entity**: 只表达持久化结构，不添加 GraphQL / HTTP / Swagger 等 adapter decorator。
 
 ## API 访问
 
-项目启动后（默认端口 3000）：
+项目启动后（默认 `APP_HOST=127.0.0.1`、`APP_PORT=3000`）：
 
-- **Playground**: [http://localhost:3000/graphql](http://localhost:3000/graphql)
-- **Schema File**: `src/schema.graphql` (自动生成)
+- **GraphQL Endpoint**: [http://127.0.0.1:3000/graphql](http://127.0.0.1:3000/graphql)
+- **GraphQL Sandbox**: 由 `GRAPHQL_SANDBOX_ENABLED` 控制；生产环境默认应关闭。
+- **Introspection**: 由 `GRAPHQL_INTROSPECTION_ENABLED` 控制；生产环境默认应关闭。
+- **Schema File**: `src/schema.graphql` 由 Nest `autoSchemaFile` 自动生成，不作为手写维护源。
 
 ## 许可证
 
