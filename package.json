@@ -15,7 +15,7 @@
     "start:dev": "npm run dev:api",
     "dev": "npm run dev:api",
     "dev:api": "TZ=Asia/Shanghai NODE_ENV=development nest start --watch",
-    "start:debug": "nest start --debug --watch",
+    "start:debug": "TZ=Asia/Shanghai NODE_ENV=development nest start --debug --watch",
     "start:prod": "NODE_ENV=production node dist/bootstraps/api/main",
     "lint:usecase-normalize-guard": "node scripts/check-usecase-normalize-guard.js",
     "lint": "npm run lint:usecase-normalize-guard && eslint \"{src,apps,libs,test}/**/*.ts\" --cache --cache-location .eslintcache --fix",
@@ -35,7 +35,7 @@
     "test:e2e:debug": "TZ=Asia/Shanghai NODE_ENV=e2e node ./test/run-e2e-group.js --file --inspect-brk",
     "migration:drill:empty-db": "TZ=Asia/Shanghai NODE_ENV=e2e ts-node -r tsconfig-paths/register src/infrastructure/database/verify-empty-db-migrations.ts",
     "ci:baseline-drill": "npm run migration:drill:empty-db",
-    "dev:worker": "NODE_ENV=development ts-node -r tsconfig-paths/register src/bootstraps/worker/main.ts",
+    "dev:worker": "TZ=Asia/Shanghai NODE_ENV=development ts-node -r tsconfig-paths/register src/bootstraps/worker/main.ts",
     "start:worker": "NODE_ENV=production node dist/bootstraps/worker/main"
   },
   "dependencies": {
