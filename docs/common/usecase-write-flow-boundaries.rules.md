@@ -52,15 +52,18 @@ For boundary contract naming, see docs/common/boundary-contract.rules.md.
 ## 5. Transaction Root
 
 Transaction Root 是写流程中负责开启事务边界的入口。
-本仓库目标口径是 Transaction Root 必须归属 usecase 或 usecase 注入的 transaction boundary contract。
+本仓库中 Transaction Root 必须归属 usecase 或 usecase 注入的 transaction boundary
+contract。
 
-目标 transaction boundary contract 命名为 `TransactionRunner`。
+当前固定 transaction boundary contract 命名为 `TransactionRunner`。
 不新增并行 `TransactionPort`、`UnitOfWork` 或其他事务 alias。
 
 硬性规则：
 
 - usecase 持有事务边界。
-- usecase 在事务回调中把同一个 transaction context 显式传给下游参与方。
+- usecase 在事务回调中把同一个 `PersistenceTransactionContext` 显式传给下游参与方。
+- usecase-local 事务参数统一命名为 `transactionContext`，类型使用
+  `@app-types/common/transaction.types` 导出的 `PersistenceTransactionContext`。
 - 下游参与方包括 modules(service)、repository wrapper、QueryService 的事务内只读方法。
 - Transaction boundary contract 是 usecase-owned boundary contract，不是独立分层。
 - Transaction boundary contract 主要供 usecase 层注入、持有与发起。
@@ -72,10 +75,16 @@ Transaction Root 是写流程中负责开启事务边界的入口。
 - modules(service) 不得为了跨聚合或跨 bounded context 写入开启事务。
 - 业务 service 上的 `runTransaction`、`withTransaction`、`transaction` 等方法不得作为新写流程入口。
 - 已迁移的 service 级事务入口不得恢复，不得新增调用点。
-- account 行锁若仍需复用，应由 usecase 先开启事务，再显式调用域内锁方法。
+- account 行锁若仍需复用，应由 usecase 先开启事务，再显式调用
+  `lockByIdForUpdate(accountId, transactionContext)` 这类域内锁方法。
   不应继续通过 `runInLockedAccountTransaction()` 之类的包装入口获取事务能力。
+- ESLint 会阻止 usecase 直接调用事务上下文的 ORM API。
+  包括 `getRepository`、`createQueryBuilder`、`save`、`insert`、`update`、`delete`、
+  `query`。
+  usecase 可以接收和传递 `PersistenceTransactionContext`，但实际 ORM 操作应下沉到
+  modules service / QueryService / repository 封装。
 
-## 6. Account / Verification 当前迁移口径
+## 6. Account / Verification 当前稳定口径
 
 - account 写 usecase 是 account / userInfo 写流程的事务持有者。
 - registration 主流程由 usecase 持有事务边界。

@@ -12,7 +12,8 @@ Source of truth: This file defines boundary contract naming and shared vocabular
 - Boundary contract 是某一层拥有的依赖边界模式，不是独立分层。
 - Port 是架构讨论中的同类概念词，不是本仓库新增文件命名约定。
 - 新增边界文件默认使用 `*.contract.ts`。
-- 不新增 `*.port.ts` / `*.ports.ts` 文件，也不建立全局 boundary contract 层或 `ports` 层。
+- 不新增 `*.port.ts` / `*.ports.ts` 文件，也不建立全局 boundary contract 层或
+  `ports` 层。
 
 ## 归属
 
@@ -28,34 +29,39 @@ Source of truth: This file defines boundary contract naming and shared vocabular
 
 - 文件后缀使用 `*.contract.ts`。
 - 文件名以能力命名，避免技术实现细节。
-- usecase 共享运行时能力可放在 `src/usecases/common/ports/*.contract.ts`。
+- usecase 共享运行时能力放在 `src/usecases/common/ports/*.contract.ts`。
   这里的 `ports/` 是既有组织目录，不代表独立 boundary contract layer。
 - 同域数据形态、View、snapshot、enum 等不属于 boundary contract。
   它们按 `docs/common/type.rules.md` 放入 `*.types.ts` 或 `src/types`。
-- 不要为了集中接口而新增全局 `ports` 目录。
 
-## TransactionRunner 目标口径
+## TransactionRunner 当前口径
 
-- `TransactionRunner` 是目标 usecase-owned transaction boundary contract。
-- 该 contract 的目标回调参数只传递纯事务上下文，不让 usecase 直接感知或操作 TypeORM `EntityManager`。
-- modules(service) / QueryService 对外只接收可传递的 transaction context；内部可按需通过 infrastructure helper 解包运行时事务能力。
-- TypeORM 绑定实现应只放在 infrastructure/database transaction 适配中。
-- 不通过新增并行 `TransactionPort`、`UnitOfWork`、`*TransactionManager = EntityManager` 或其他 alias 快修事务边界。
-
-## 当前 Legacy 兼容口径
-
-当前项目仍存在历史 TypeORM `EntityManager` transaction alias。
-它们只允许必要维护，不作为新增代码模板。
-历史 core `*.ports.ts` 已迁移为 `*.contract.ts`，不得重新引入。
-
-新增或重构 touched code 时：
-
-- 不新增新的 `*.port.ts` / `*.ports.ts` 文件。
-- 不新增 `TransactionPort` / `UnitOfWork` 并行抽象名。
-- 不新增新的 `*TransactionManager` alias。
-- 若必须维护 legacy alias，保持最小改动，并在后续事务边界重构中迁移。
+- `TransactionRunner` 是 usecase-owned transaction boundary contract。
+- 当前固定真源是
+  `src/usecases/common/ports/transaction-runner.contract.ts`。
+- `TransactionRunner.run()` 回调只传递 `PersistenceTransactionContext`。
+- `PersistenceTransactionContext` 是纯共享类型，真源在
+  `src/types/common/transaction.types.ts`，通过 `@app-types/common/transaction.types`
+  引用。
+- `PersistenceTransactionContext` 使用 `unique symbol` brand，不暴露 ORM API，也不包含
+  `manager` 等运行时字段。
+- usecase 只能传递 `transactionContext`，不得感知或操作 TypeORM `EntityManager`。
+- modules(service) / QueryService 对外接收
+  `transactionContext?: PersistenceTransactionContext`；内部可按需通过 infrastructure
+  TypeORM helper 解包为 `EntityManager`。
+- TypeORM 绑定实现只放在
+  `src/infrastructure/database/transaction/typeorm-persistence-transaction-context.ts`；
+  该 helper 内部用私有 `WeakMap<PersistenceTransactionContext, EntityManager>` 保存映射。
+  usecase 不得 import 该 helper。
+- 不通过新增并行 `TransactionPort`、`UnitOfWork`、
+  `*TransactionManager = EntityManager` 或其他 alias 快修事务边界。
 
 ## Lint Guard
 
-当前 ESLint 只覆盖一部分架构边界，详见 `docs/common/eslint-architecture-rules.md`。
-本文件中未被 ESLint 覆盖的规则仍是 review 规则。
+当前 ESLint 会拦截以下偏移：
+
+- 新增或导入 `*.port.ts` / `*.ports.ts` boundary 文件。
+- 导入 `transaction-runner.port`。
+- 新增 `TransactionPort` / `UnitOfWork` 事务并行抽象名。
+- 在 usecases / modules 中新增 `*TransactionManager` alias。
+  不得恢复旧 `TransactionManager = EntityManager` 兼容类型。

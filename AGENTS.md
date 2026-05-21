@@ -61,7 +61,7 @@ Detailed or fast-changing rules belong in `docs/`.
 - Lift cross-domain reads and writes to a usecase; do not push them down into modules or infrastructure.
 - Use QueryService for read-side view normalization and write-after-read output when a stable view exists.
 - Treat outbox as an architectural option, not an existing reusable component.
-- `TransactionRunner` is the target usecase-owned transaction boundary contract; current TypeORM `EntityManager` transaction aliases are legacy migration debt. Do not add new aliases or parallel `TransactionPort` / `UnitOfWork` abstractions.
+- `TransactionRunner` is the current usecase-owned transaction boundary contract; do not introduce parallel `TransactionPort` / `UnitOfWork` aliases.
 
 ## Type Placement
 

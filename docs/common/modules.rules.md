@@ -22,7 +22,7 @@ For boundary contract naming, see docs/common/boundary-contract.rules.md.
 
 - 同域读服务与细粒度写服务。
 - ORM Entity 与 Repository 的内部使用与封装。
-- 接收 usecase 传入的 transaction context，并在同一事务内执行细粒度写入。
+- 接收 usecase 传入的 `PersistenceTransactionContext`，并在同一事务内执行细粒度写入。
 - QueryService 归属 modules(service)。
   只读与规范化输出在此完成。
 - 与 core-owned boundary contract 交互的同域适配逻辑。
@@ -31,10 +31,14 @@ For boundary contract naming, see docs/common/boundary-contract.rules.md.
 - Modules(service) 可拥有 module-owned boundary contract / token，用于隔离本模块所需的
   infrastructure 实现。
   仅在模块需要隔离可替换实现时使用，不应为普通 service 机械创建。
+  Boundary contract 是归属某一层的边界模式，不是独立分层；不得建立全局 boundary
+  contract 层或 `ports` 层来集中放置所有接口。
+  新增边界文件使用 `*.contract.ts`，不使用 `*.port.ts` 新增并行约定。
 - 对外只导出 service、必要 DI token 与稳定类型。
 - 同域多层共享的稳定 View / contract type 可放在 bounded context 根 `*.types.ts` 对外暴露。
 - 领域专用排序解析器。
   只负责排序白名单与列解析。
+- 不引入业务规则。
 - 业务域模块可依赖 `src/modules/common/*` 提供的共享能力。
 - `src/modules/common/*` 可依赖 infrastructure / core / types。
 - `src/modules/common/*` 内部可按能力目录拆分 module / service / provider / helper / types。
@@ -47,10 +51,11 @@ For boundary contract naming, see docs/common/boundary-contract.rules.md.
 - 提供全局事务入口。
 - 提供可被跨 bounded context 复用的 `runTransaction`、`withTransaction`、`transaction` 包裹方法。
 - 直接依赖 transaction boundary contract。
-  当前目标包括 `TransactionRunner`；历史或讨论名如 `TransactionPort`、`UnitOfWork` 也不得新增或依赖。
+  当前包括 `TransactionRunner`；历史或讨论名如 `TransactionPort`、`UnitOfWork` 也不得新增或依赖。
 - 为了让上游获得事务能力而暴露业务 service。
 - 在 modules(service) 内开启跨聚合或跨 bounded context 事务。
 - 直接被 adapters 依赖。
+- 在 service 内部开启跨域事务。
 - 对上游返回 ORM Entity 或 QueryBuilder。
 - `src/modules/common/*` 反向依赖业务域模块。
   例如 `auth`、`account`、`verification-record`、`third-party-auth` 等。
@@ -89,9 +94,12 @@ For boundary contract naming, see docs/common/boundary-contract.rules.md.
 - 事务边界由 usecase 持有。
 - modules(service) 只接收事务上下文，不拥有全局事务入口。
 - modules(service) 不直接依赖 transaction boundary contract。
-- modules(service) / QueryService 对外事务参数使用通用 transaction context。
-- modules(service) / QueryService 内部需要 TypeORM `EntityManager` 时，应通过 infrastructure helper 解包。
+- modules(service) / QueryService 对外事务参数使用
+  `transactionContext?: PersistenceTransactionContext`。
+- modules(service) / QueryService 内部需要 TypeORM `EntityManager` 时，可通过 infrastructure
+  helper `getTypeOrmEntityManager(transactionContext)` 解包为 `EntityManager`。
   不导出 `*TransactionManager = EntityManager` 这类供上层复用的 alias。
+  ESLint 会阻止 modules 中新增 `*TransactionManager` alias。
 - 细粒度服务。
   单方法单语义，便于用例复用与事务编排。
 - 输出规范化。

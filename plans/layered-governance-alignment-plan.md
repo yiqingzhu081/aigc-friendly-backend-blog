@@ -156,7 +156,7 @@ P0 决策闸口：
 
 当前产出：
 
-- `AGENTS.md` 已补 current API 路由，并将事务目标口径收敛到 `TransactionRunner`，当前
+- `AGENTS.md` 已补 current API 路由，并将事务当前口径收敛到 `TransactionRunner`，当前
   EntityManager alias 已在 P3b 第八批清空。
 - `docs/README.md` 已补 aggregate/entity/plans/current API/frontend/deprecated 路由。
 - `plans/README.md` 已补生命周期、token 友好读取顺序与当前主计划入口。

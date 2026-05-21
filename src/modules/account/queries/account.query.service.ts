@@ -1,4 +1,5 @@
 // src/modules/account/queries/account.query.service.ts
+import type { PersistenceTransactionContext } from '@app-types/common/transaction.types';
 import { IdentityTypeEnum, UserAccountView } from '@app-types/models/account.types';
 import { UserInfoView } from '@app-types/models/auth.types';
 import { Gender, UserState } from '@app-types/models/user-info.types';
@@ -9,6 +10,7 @@ import { ACCOUNT_ERROR } from '@core/common/errors';
 import { DomainError, PERMISSION_ERROR } from '@core/common/errors/domain-error';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { getTypeOrmEntityManager } from '@src/infrastructure/database/transaction/typeorm-persistence-transaction-context';
 import { Repository } from 'typeorm';
 import { AccountEntity } from '../base/entities/account.entity';
 import { UserInfoEntity } from '../base/entities/user-info.entity';
@@ -85,7 +87,10 @@ export class AccountQueryService {
     return view;
   }
 
-  async getUserInfoViewStrict(params: { accountId: number }): Promise<
+  async getUserInfoViewStrict(params: {
+    accountId: number;
+    transactionContext?: PersistenceTransactionContext;
+  }): Promise<
     UserInfoView & {
       nickname: string;
       userState: UserState;
@@ -97,7 +102,7 @@ export class AccountQueryService {
   > {
     const { accountId } = params;
 
-    const base = await this.findUserInfoByAccountId(accountId);
+    const base = await this.findUserInfoByAccountId(accountId, params.transactionContext);
     if (!base) {
       throw new DomainError(
         ACCOUNT_ERROR.USER_INFO_NOT_FOUND,
@@ -105,7 +110,9 @@ export class AccountQueryService {
       );
     }
 
-    const finalAccessGroup = this.normalizeAccessGroup(base.accessGroup);
+    const finalAccessGroup: IdentityTypeEnum[] = base.accessGroup?.length
+      ? base.accessGroup
+      : [IdentityTypeEnum.REGISTRANT];
 
     return this.buildUserInfoView(base, accountId, finalAccessGroup) as UserInfoView & {
       nickname: string;
@@ -115,6 +122,15 @@ export class AccountQueryService {
       createdAt: Date;
       updatedAt: Date;
     };
+  }
+
+  async getUserInfoViewForLogin(params: { accountId: number }): Promise<UserInfoView> {
+    const base = await this.findUserInfoByAccountId(params.accountId);
+    const finalAccessGroup: IdentityTypeEnum[] = base?.accessGroup?.length
+      ? base.accessGroup
+      : [IdentityTypeEnum.REGISTRANT];
+
+    return this.buildUserInfoView(base, params.accountId, finalAccessGroup);
   }
 
   private isAllowedToView(session: UsecaseSession, targetAccountId: number): boolean {
@@ -133,7 +149,7 @@ export class AccountQueryService {
   }
 
   private buildUserInfoView(
-    base: UserInfoEntity,
+    base: UserInfoEntity | null,
     accountId: number,
     accessGroup: IdentityTypeEnum[],
   ): UserInfoView {
@@ -147,44 +163,49 @@ export class AccountQueryService {
     };
   }
 
-  private buildBasicFields(base: UserInfoEntity) {
+  private buildBasicFields(base: UserInfoEntity | null) {
     return {
-      nickname: base.nickname ?? '',
-      gender: base.gender ?? Gender.SECRET,
-      birthDate: base.birthDate ?? null,
-      avatarUrl: base.avatarUrl ?? null,
-      signature: base.signature ?? null,
+      nickname: base?.nickname ?? '',
+      gender: base?.gender ?? Gender.SECRET,
+      birthDate: base?.birthDate ?? null,
+      avatarUrl: base?.avatarUrl ?? null,
+      signature: base?.signature ?? null,
     };
   }
 
-  private buildContactFields(base: UserInfoEntity) {
+  private buildContactFields(base: UserInfoEntity | null) {
     return {
-      email: base.email ?? null,
-      address: base.address ?? null,
-      phone: base.phone ?? null,
+      email: base?.email ?? null,
+      address: base?.address ?? null,
+      phone: base?.phone ?? null,
     };
   }
 
-  private buildExtendedFields(base: UserInfoEntity) {
+  private buildExtendedFields(base: UserInfoEntity | null) {
     return {
-      tags: this.normalizeTags(base.tags),
-      geographic: base.geographic ?? null,
-      metaDigest: base.metaDigest ?? null,
+      tags: this.normalizeTags(base?.tags),
+      geographic: base?.geographic ?? null,
+      metaDigest: base?.metaDigest ?? null,
     };
   }
 
-  private buildSystemFields(base: UserInfoEntity) {
+  private buildSystemFields(base: UserInfoEntity | null) {
     return {
-      notifyCount: base.notifyCount ?? 0,
-      unreadCount: base.unreadCount ?? 0,
-      userState: base.userState ?? UserState.PENDING,
-      createdAt: base.createdAt ?? new Date(),
-      updatedAt: base.updatedAt ?? new Date(),
+      notifyCount: base?.notifyCount ?? 0,
+      unreadCount: base?.unreadCount ?? 0,
+      userState: base?.userState ?? UserState.PENDING,
+      createdAt: base?.createdAt ?? new Date(),
+      updatedAt: base?.updatedAt ?? new Date(),
     };
   }
 
-  private async findUserInfoByAccountId(accountId: number): Promise<UserInfoEntity | null> {
-    return await this.userInfoRepository.findOne({
+  private async findUserInfoByAccountId(
+    accountId: number,
+    transactionContext?: PersistenceTransactionContext,
+  ): Promise<UserInfoEntity | null> {
+    const manager = transactionContext ? getTypeOrmEntityManager(transactionContext) : undefined;
+    const repository = manager ? manager.getRepository(UserInfoEntity) : this.userInfoRepository;
+    return await repository.findOne({
       where: { accountId },
       relations: ['account'],
     });
@@ -194,14 +215,6 @@ export class AccountQueryService {
     if (!tags) return null;
     if (Array.isArray(tags)) return tags.map((v) => String(v));
     return null;
-  }
-
-  private normalizeAccessGroup(accessGroup?: IdentityTypeEnum[] | null): IdentityTypeEnum[] {
-    const validRoles = new Set<string>(Object.values(IdentityTypeEnum));
-    const normalized = (accessGroup ?? []).filter((role): role is IdentityTypeEnum =>
-      validRoles.has(String(role)),
-    );
-    return normalized.length > 0 ? Array.from(new Set(normalized)) : [IdentityTypeEnum.REGISTRANT];
   }
 
   private maskToBasic(view: UserInfoView): UserInfoView {

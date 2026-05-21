@@ -129,7 +129,10 @@ For layer-owned boundary contract naming, see docs/common/boundary-contract.rule
   例如 adapters 不得从 modules 的 `*.service.ts`、`*.query.service.ts`、局部 `queries/*.types.ts` 借类型。
 - 禁止 usecase 为声明事务上下文类型而从 modules service / QueryService 实现文件、
   bounded context 根 `*.types.ts` 或历史 transaction alias 文件借类型。
-- 目标事务上下文类型应是跨 bounded context 的稳定纯类型，不导入 TypeORM、Nest、core、infrastructure 或 adapter 类型，也不暴露可供 usecase 操作的运行时字段。
+- `PersistenceTransactionContext` 是跨 bounded context 的稳定纯类型，真源是
+  `src/types/common/transaction.types.ts`。
+  该类型使用 `unique symbol` brand，不导入 TypeORM、Nest、core、infrastructure 或
+  adapter 类型，也不暴露可供 usecase 操作的运行时字段。
 - 禁止把 infrastructure runtime contract 当作上层业务类型来源。
   例如 BullMQ payload contract、validator registry、第三方 SDK 响应类型不得直接成为 adapters /
   usecases / modules 的共享输入输出类型真源。
@@ -140,6 +143,8 @@ For layer-owned boundary contract naming, see docs/common/boundary-contract.rule
 - 不新增多个并行 `EntityManager` alias。
   尤其不得新增或恢复 `AccountTransactionManager`、`VerificationRecordTransactionManager`、
   `*TransactionManager = EntityManager` 这类给上层借用的事务类型。
+- ESLint 会阻止 usecases / modules 中新增 `*TransactionManager` alias。
+  不得恢复旧 `TransactionManager` 兼容类型。
 - 局部流程类型继续 colocate 在本层，不向上层暴露实现位置。
 
 说明：type 文件不因为“只是类型”而豁免依赖方向。

@@ -8,6 +8,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   OneToOne,
   PrimaryGeneratedColumn,
@@ -15,6 +16,7 @@ import {
 } from 'typeorm';
 import { AccountEntity } from './account.entity';
 
+@Index('uk_account_id', ['accountId'], { unique: true })
 @Entity('base_user_info')
 export class UserInfoEntity {
   @PrimaryGeneratedColumn({ type: 'int', comment: '主键' })

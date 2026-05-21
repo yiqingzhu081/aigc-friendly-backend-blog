@@ -25,11 +25,6 @@ const TRANSACTION_MANAGER_ORM_METHODS = new Set([
   'update',
 ]);
 
-const LEGACY_TRANSACTION_MANAGER_ALIASES = new Set([
-  `${path.join(MODULES_ROOT, 'account', 'base', 'services', 'account.service.ts')}#AccountTransactionManager`,
-  `${path.join(MODULES_ROOT, 'verification-record', 'verification-record.service.ts')}#VerificationRecordTransactionManager`,
-  `${path.join(MODULES_ROOT, 'async-task-record', 'async-task-record.service.ts')}#AsyncTaskRecordTransactionManager`,
-]);
 function isPathInside(targetPath, rootPath) {
   const relative = path.relative(rootPath, targetPath);
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
@@ -175,24 +170,22 @@ const localArchitecturePlugin = {
         ) {
           return {};
         }
-        function isAllowedLegacyAlias(typeName) {
-          return LEGACY_TRANSACTION_MANAGER_ALIASES.has(`${context.filename}#${typeName}`);
-        }
-        function reportIfNeeded(node, typeName) {
-          if (!typeName.endsWith('TransactionManager')) return;
-          if (isAllowedLegacyAlias(typeName)) return;
-          context.report({
-            node,
-            message:
-              '禁止新增本地 *TransactionManager alias/interface；usecase 持有事务边界，modules(service) 只接收 transactionContext。',
-          });
-        }
         return {
           TSTypeAliasDeclaration(node) {
-            reportIfNeeded(node, node.id.name);
+            if (!node.id.name.endsWith('TransactionManager')) return;
+            context.report({
+              node,
+              message:
+                '禁止新增本地 *TransactionManager alias；usecase 使用 PersistenceTransactionContext，modules(service) / QueryService 对外接收 transactionContext。',
+            });
           },
           TSInterfaceDeclaration(node) {
-            reportIfNeeded(node, node.id.name);
+            if (!node.id.name.endsWith('TransactionManager')) return;
+            context.report({
+              node,
+              message:
+                '禁止新增本地 *TransactionManager interface；usecase 使用 PersistenceTransactionContext，modules(service) / QueryService 对外接收 transactionContext。',
+            });
           },
         };
       },

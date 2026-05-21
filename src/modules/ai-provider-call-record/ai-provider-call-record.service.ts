@@ -1,4 +1,5 @@
 import type { PersistenceTransactionContext } from '@app-types/common/transaction.types';
+import { DomainError, THIRDPARTY_ERROR } from '@core/common/errors/domain-error';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { getTypeOrmEntityManager } from '@src/infrastructure/database/transaction/typeorm-persistence-transaction-context';
@@ -118,7 +119,16 @@ export class AiProviderCallRecordService {
         throw error;
       }
     }
-    throw new Error('ai_provider_call_record_create_retry_exhausted');
+    throw new DomainError(
+      THIRDPARTY_ERROR.PROVIDER_API_ERROR,
+      'ai_provider_call_record_create_retry_exhausted',
+      {
+        traceId: input.data.traceId,
+        provider: input.data.provider,
+        model: input.data.model,
+        maxRetry: AiProviderCallRecordService.CREATE_RECORD_MAX_RETRY,
+      },
+    );
   }
 
   async updateRecordById(input: {

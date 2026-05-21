@@ -38,9 +38,8 @@ performs an automatic `--fix` pass.
   There is no current file/import allowlist for this rule.
 
 - `local-architecture/no-transaction-manager-alias`
-  Blocks new local `*TransactionManager` aliases/interfaces in usecases and modules.
-  Current legacy aliases in account, verification-record, and async-task-record are allowlisted until
-  transaction boundary migration.
+  Blocks local `*TransactionManager` aliases/interfaces in usecases and modules.
+  Use `PersistenceTransactionContext` instead of restoring a `TransactionManager` alias.
 
 - `local-architecture/no-usecase-transaction-manager-orm-api`
   Blocks usecases from directly calling ORM APIs on transaction contexts, such as `save`,

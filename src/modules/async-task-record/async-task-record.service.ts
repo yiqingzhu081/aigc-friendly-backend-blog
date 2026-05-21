@@ -94,6 +94,45 @@ export class AsyncTaskRecordService {
     return entities.map((entity) => this.toView(entity));
   }
 
+  async findLatestByDedupKey(input: {
+    readonly where: {
+      readonly queueName: string;
+      readonly dedupKey: string;
+      readonly excludeJobIdPrefixes?: ReadonlyArray<string>;
+      readonly excludeUnstartedFailed?: boolean;
+    };
+    readonly transactionContext?: PersistenceTransactionContext;
+  }): Promise<AsyncTaskRecordView | null> {
+    const normalizedDedupKey = input.where.dedupKey.trim();
+    if (normalizedDedupKey.length === 0) {
+      return null;
+    }
+
+    const repository = this.getRepository(input.transactionContext);
+    const query = repository
+      .createQueryBuilder('record')
+      .where('record.queueName = :queueName', {
+        queueName: input.where.queueName,
+      })
+      .andWhere('record.dedupKey = :dedupKey', {
+        dedupKey: normalizedDedupKey,
+      })
+      .orderBy('record.id', 'DESC');
+
+    for (const [index, prefix] of (input.where.excludeJobIdPrefixes ?? []).entries()) {
+      query.andWhere(`record.jobId NOT LIKE :jobIdPrefix${index}`, {
+        [`jobIdPrefix${index}`]: `${prefix}%`,
+      });
+    }
+
+    if (input.where.excludeUnstartedFailed) {
+      query.andWhere("NOT (record.status = 'failed' AND record.startedAt IS NULL)");
+    }
+
+    const entity = await query.getOne();
+    return entity ? this.toView(entity) : null;
+  }
+
   async countByStatus(input: {
     readonly statuses: ReadonlyArray<AsyncTaskRecordStatus>;
     readonly transactionContext?: PersistenceTransactionContext;
@@ -296,6 +335,79 @@ export class AsyncTaskRecordService {
       },
       transactionContext: input.transactionContext,
     });
+  }
+
+  async recordStartedIfAbsent(input: {
+    readonly data: RecordAsyncTaskStartedInput;
+    readonly transactionContext?: PersistenceTransactionContext;
+  }): Promise<{
+    readonly record: AsyncTaskRecordView;
+    readonly created: boolean;
+  }> {
+    const existing = await this.findByQueueJob({
+      where: {
+        queueName: input.data.queueName,
+        jobId: input.data.jobId,
+      },
+      transactionContext: input.transactionContext,
+    });
+    if (existing) {
+      return {
+        record: existing,
+        created: false,
+      };
+    }
+
+    const startedAt = input.data.startedAt ?? new Date();
+    const occurredAt = input.data.occurredAt ?? startedAt;
+
+    try {
+      const record = await this.createRecord({
+        data: {
+          queueName: input.data.queueName,
+          jobName: input.data.jobName,
+          jobId: input.data.jobId,
+          traceId: input.data.traceId,
+          actorAccountId: input.data.actorAccountId,
+          actorActiveRole: input.data.actorActiveRole,
+          bizType: input.data.bizType,
+          bizKey: input.data.bizKey,
+          bizSubKey: input.data.bizSubKey,
+          source: input.data.source,
+          reason: input.data.reason,
+          occurredAt,
+          dedupKey: input.data.dedupKey,
+          status: 'processing',
+          attemptCount: input.data.attemptCount ?? 1,
+          maxAttempts: input.data.maxAttempts,
+          enqueuedAt: input.data.enqueuedAt ?? startedAt,
+          startedAt,
+        },
+        transactionContext: input.transactionContext,
+      });
+      return {
+        record,
+        created: true,
+      };
+    } catch (error: unknown) {
+      if (!this.isUniqueConstraintViolation(error)) {
+        throw error;
+      }
+      const duplicated = await this.findByQueueJob({
+        where: {
+          queueName: input.data.queueName,
+          jobId: input.data.jobId,
+        },
+        transactionContext: input.transactionContext,
+      });
+      if (!duplicated) {
+        throw error;
+      }
+      return {
+        record: duplicated,
+        created: false,
+      };
+    }
   }
 
   async recordFinished(input: {

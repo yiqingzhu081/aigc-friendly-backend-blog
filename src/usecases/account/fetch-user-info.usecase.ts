@@ -3,9 +3,10 @@
 import { IdentityTypeEnum } from '@app-types/models/account.types';
 import type { PersistenceTransactionContext } from '@app-types/common/transaction.types';
 import { UserInfoView } from '@app-types/models/auth.types'; // 导入统一的 UserInfoView
-import { Gender, UserState } from '@app-types/models/user-info.types';
+import { UserState } from '@app-types/models/user-info.types';
 import { ACCOUNT_ERROR, DomainError } from '@core/common/errors';
 import { AccountSecurityService } from '@modules/account/base/services/account-security.service';
+import { AccountQueryService } from '@modules/account/queries/account.query.service';
 import { Injectable } from '@nestjs/common';
 import { AccountService } from '@src/modules/account/base/services/account.service';
 
@@ -31,6 +32,7 @@ type UserInfoRecord = Awaited<ReturnType<AccountService['findUserInfoByAccountId
 export class FetchUserInfoUsecase {
   constructor(
     private readonly accountService: AccountService,
+    private readonly accountQueryService: AccountQueryService,
     private readonly accountSecurityService: AccountSecurityService,
   ) {}
 
@@ -49,10 +51,9 @@ export class FetchUserInfoUsecase {
     accountId: number;
     accessGroup?: IdentityTypeEnum[];
   }): Promise<UserInfoView> {
-    const base = await this.accountService.findUserInfoByAccountId(params.accountId);
-    const finalAccessGroup = this.normalizeAccessGroup(base?.accessGroup);
-
-    return this.buildUserInfoView(base, params.accountId, finalAccessGroup);
+    return await this.accountQueryService.getUserInfoViewForLogin({
+      accountId: params.accountId,
+    });
   }
 
   /**
@@ -76,27 +77,10 @@ export class FetchUserInfoUsecase {
   > {
     const { accountId } = params;
 
-    const base = await this.accountService.findUserInfoByAccountId(
+    return await this.accountQueryService.getUserInfoViewStrict({
       accountId,
-      params.transactionContext,
-    );
-    if (!base) {
-      throw new DomainError(
-        ACCOUNT_ERROR.USER_INFO_NOT_FOUND,
-        `账户 ID ${accountId} 对应的用户信息不存在，无法完成操作`,
-      );
-    }
-
-    const finalAccessGroup = this.normalizeAccessGroup(base.accessGroup);
-
-    return this.buildUserInfoView(base, accountId, finalAccessGroup) as UserInfoView & {
-      nickname: string;
-      userState: UserState;
-      notifyCount: number;
-      unreadCount: number;
-      createdAt: Date;
-      updatedAt: Date;
-    };
+      transactionContext: params.transactionContext,
+    });
   }
 
   /**
@@ -131,91 +115,14 @@ export class FetchUserInfoUsecase {
       throw new DomainError(ACCOUNT_ERROR.ACCOUNT_SUSPENDED, '账户因安全问题已被暂停');
     }
 
-    // 5. 确定最终的 accessGroup（严格使用数据库字段）
-    const finalAccessGroup = this.normalizeAccessGroup(userInfo.accessGroup);
-
-    // 6. 构建用户信息视图
-    const userInfoView = this.buildUserInfoView(userInfo, accountId, finalAccessGroup);
+    // 5. 构建用户信息视图
+    const userInfoView = await this.accountQueryService.getUserInfoViewStrict({ accountId });
 
     return {
       userInfoView,
       securityResult,
       rawUserInfo: userInfo,
     };
-  }
-
-  /**
-   * 构建用户信息视图对象（统一映射与兜底策略）
-   */
-  private buildUserInfoView(
-    base: UserInfoRecord,
-    accountId: number,
-    accessGroup: IdentityTypeEnum[],
-  ): UserInfoView {
-    return {
-      accountId,
-      accessGroup, // 单一真相源：要么用外部透传，要么本用例计算
-      ...this.buildBasicFields(base),
-      ...this.buildContactFields(base),
-      ...this.buildExtendedFields(base),
-      ...this.buildSystemFields(base),
-    };
-  }
-
-  /** 基本信息 */
-  private buildBasicFields(base: UserInfoRecord) {
-    return {
-      nickname: base?.nickname ?? '', // 改为非空，提供默认值
-      gender: base?.gender ?? Gender.SECRET, // 改为非空，提供默认值
-      birthDate: base?.birthDate ?? null,
-      avatarUrl: base?.avatarUrl ?? null,
-      signature: base?.signature ?? null,
-    };
-  }
-
-  /** 联系方式 */
-  private buildContactFields(base: UserInfoRecord) {
-    return {
-      email: base?.email ?? null,
-      address: base?.address ?? null,
-      phone: base?.phone ?? null,
-    };
-  }
-
-  /** 扩展信息（JSON 字段等） */
-  private buildExtendedFields(base: UserInfoRecord) {
-    return {
-      tags: this.normalizeTags(base?.tags),
-      geographic: base?.geographic ?? null,
-      metaDigest: base?.metaDigest ?? null, // 添加 metaDigest 字段
-    };
-  }
-
-  /** 系统字段/状态 */
-  private buildSystemFields(base: UserInfoRecord) {
-    return {
-      // 这些字段现在都是非空的，始终提供默认值
-      notifyCount: base?.notifyCount ?? 0,
-      unreadCount: base?.unreadCount ?? 0,
-      userState: base?.userState ?? UserState.PENDING,
-      createdAt: base?.createdAt ?? new Date(), // 改为非空，提供默认值
-      updatedAt: base?.updatedAt ?? new Date(), // 改为非空，提供默认值
-    };
-  }
-
-  /** tags 兜底：只能是字符串数组；否则返回 null */
-  private normalizeTags(tags: unknown): string[] | null {
-    if (!tags) return null;
-    if (Array.isArray(tags)) return tags.map((v) => String(v));
-    return null;
-  }
-
-  private normalizeAccessGroup(accessGroup?: IdentityTypeEnum[] | null): IdentityTypeEnum[] {
-    const validRoles = new Set<string>(Object.values(IdentityTypeEnum));
-    const normalized = (accessGroup ?? []).filter((role): role is IdentityTypeEnum =>
-      validRoles.has(String(role)),
-    );
-    return normalized.length > 0 ? Array.from(new Set(normalized)) : [IdentityTypeEnum.REGISTRANT];
   }
 }
 export { UserInfoView };
