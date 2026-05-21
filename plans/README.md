@@ -92,5 +92,4 @@ direction -> plan -> docs / followup -> delete
 
 ## 已收口背景
 
-- [account-generic-identity-plan.md](./account-generic-identity-plan.md)
-- [layered-governance-alignment-plan.md](./layered-governance-alignment-plan.md)
+- 已完成计划统一归档到 [docs/deprecated](../docs/deprecated/README.md)。

@@ -1,4 +1,4 @@
-<!-- 文件位置: plans/layered-governance-alignment-plan.md -->
+<!-- 文件位置: docs/deprecated/layered-governance-alignment-plan.md -->
 
 # Layered Governance Alignment Plan
 
@@ -18,7 +18,7 @@
   `/var/www/backend_next/plans/aigc-ddd-framework-extraction-plan.md`
 - 当前旧项目 agent context：`AGENTS.md`
 - 当前旧项目 docs index：`docs/README.md`
-- 当前旧项目账号收口计划：`plans/account-generic-identity-plan.md`
+- 当前旧项目账号收口计划：`docs/deprecated/account-generic-identity-plan.md`
 
 ## 总目标
 

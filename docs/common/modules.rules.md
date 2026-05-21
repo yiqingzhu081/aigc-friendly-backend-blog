@@ -102,6 +102,15 @@ For boundary contract naming, see docs/common/boundary-contract.rules.md.
   ESLint 会阻止 modules 中新增 `*TransactionManager` alias。
 - 细粒度服务。
   单方法单语义，便于用例复用与事务编排。
+- 批量数据访问优先。
+  面对随业务数据量增长的输入集合时，modules(service) / QueryService 应优先批量读取、
+  内存 diff、批量 insert / update / upsert；避免在循环中逐条执行 repository / QueryBuilder
+  的 CRUD。
+  若必须逐条处理，需有明确原因，例如强顺序、行级锁、单条失败隔离、外部接口限流，且输入规模
+  有清晰上限。
+- 读接口优先集合化。
+  当单个读取与多个读取语义相同时，优先提供 `listByIds({ ids })` / `findByKeys({ keys })`
+  这类批量入口；单个值作为 `[id]` / `[key]` 调用同一逻辑，避免维护两套重复查询口径。
 - 输出规范化。
   对外输出去敏感字段的 View、DTO 或 Record snapshot。
 
@@ -134,6 +143,8 @@ For boundary contract naming, see docs/common/boundary-contract.rules.md.
 
 - 按 bounded context 划分模块目录。
 - 模块内部再区分 service、queries、entities。
+- 命名以本层稳定领域语义为主；外部系统、协议、存储、UI 控件、SDK 或历史实现的偶然语义，
+  进入业务 service / usecase / 共享类型前必须先翻译成本项目可读的领域名称。
 - 读服务命名以 query.service.ts 结尾。
 - 写服务命名以 service.ts 结尾。
 - QueryService 放在 `src/modules/<bounded-context>/queries/` 目录。

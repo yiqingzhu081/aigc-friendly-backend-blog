@@ -28,8 +28,9 @@ For boundary contract naming, see docs/common/boundary-contract.rules.md.
 - usecases → modules(service) / core
 - usecases 可依赖 usecase-owned boundary contract。
   该类 contract 只定义 contract / token / 最小共享类型，不承载业务流程实现，也不是独立分层。
-  共享的 usecase 编排运行时能力可放在 `src/usecases/common/ports/*.contract.ts`。
-  `*.contract.ts` 是 boundary contract 文件后缀；不使用 `*.port.ts` 新增并行约定。
+  共享的 usecase 编排运行时能力统一放在 `src/usecases/common/ports/*.contract.ts`。
+  `*.contract.ts` 是本仓库 lint 识别的 usecase-owned boundary contract 后缀；
+  不使用 `*.port.ts` 新增并行约定。
   Port 只作为架构讨论术语出现，不作为新增文件后缀。
   单个用例私有能力优先 colocate 在该 usecase 附近。
 - usecases → usecases 仅限同域编排型依赖。
@@ -84,6 +85,12 @@ For boundary contract naming, see docs/common/boundary-contract.rules.md.
 
 - 纯读放在 modules(service) 的 QueryService，便于复用。
 - modules(service) 可提供基础写方法，但不得包含完整写语义或流程编排。
+- Usecase 编排批量输入时，不得默认在循环中逐条 `await` 调用读写 service、QueryService、
+  repository 封装或外部访问能力。
+  应优先让下游提供批量读取/批量写入接口，由 usecase 做一次性收集、内存 diff 与批量提交。
+  Review 时看到 `for` / `forEach` / `map` 搭配 `await` 数据访问，应默认按 N+1 风险检查。
+- 单个读取若与批量读取语义相同，优先调用批量入口并传 `[id]` / `[key]`，不要新增并维护一套
+  重复的单项读取逻辑。
 - 跨域读只能由上层 Usecase 发起，通过被读域的 QueryService 获取。
 - 跨域写通过事件或显式编排。
 - `Outbox` 可作为一致性设计选项进行评估。

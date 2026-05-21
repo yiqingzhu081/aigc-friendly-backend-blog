@@ -124,7 +124,9 @@ For layer-owned boundary contract naming, see docs/common/boundary-contract.rule
 - L1 共享类型统一通过 `@app-types/*` 引用。
 - 禁止使用 `@src/types/*` 混用入口。
 - 同域多层共享但未跨域的稳定类型，统一放在 `src/modules/<bounded-context>/<bounded-context>.types.ts`。
-- 同域上游若需复用该类类型，只允许 `import type` 或纯类型 import 此 bounded context 根公共类型文件。
+- 同域上游（含 adapters / usecases）若需复用该类类型，只允许 `import type` 或纯类型 import
+  此 bounded context 根公共类型文件；该规则不允许 adapters import modules 的 service、
+  QueryService、Entity、局部 `queries/*.types.ts`，也不允许任何值导入。
 - 禁止为了复用类型跨层 import 下层实现文件。
   例如 adapters 不得从 modules 的 `*.service.ts`、`*.query.service.ts`、局部 `queries/*.types.ts` 借类型。
 - 禁止 usecase 为声明事务上下文类型而从 modules service / QueryService 实现文件、
@@ -175,6 +177,9 @@ For layer-owned boundary contract naming, see docs/common/boundary-contract.rule
 - 文件名统一 `*.types.ts`。
   已约定的 `*.enum.ts` 除外。
 - enum 命名优先业务语义名。
+- 类型命名优先本项目稳定领域语义。
+  外部系统、协议、存储、UI 控件、SDK 或历史实现的偶然语义不得直接成为共享/业务类型真源名称；
+  需要保留时应限制在 raw / adapter / infrastructure 边界内。
 - 避免 `Common` / `Base` 等泛名。
 - 输入参数优先对象参数。
   单一简单值除外。

@@ -22,7 +22,7 @@ Source of truth: `eslint.config.mjs` is the executable source of truth; this fil
 Prefer `npx eslint <path>` or the no-fix full command while investigating because `npm run lint`
 performs an automatic `--fix` pass.
 
-## Current Rule Map
+## Rule Map
 
 - `boundaries/dependencies`
   Enforces the main layer dependency matrix:
@@ -31,9 +31,9 @@ performs an automatic `--fix` pass.
   core -> core/types, types -> types.
   Module-owned `*.contract.ts` files are modeled separately so usecases/modules/infrastructure may
   depend on the contract without allowing imports of module services or internals.
-  Module `*.types.ts` files are modeled separately so same-domain and common type contracts can be
-  shared without opening broader module internals.
-  Adapter files may `import type` same-domain module `*.types.ts` only.
+  `modules-contracts` must not depend on same-domain services, queries, or internals; contracts
+  should only reference other contracts, stable module types, core contracts/types, or `@app-types/*`.
+  It also allows adapters to `import type` same-domain module root `*.types.ts` files only.
 
 - `local-architecture/no-boundary-port-naming-drift`
   Blocks new `*.port.ts` / `*.ports.ts` boundary files and imports.
@@ -50,7 +50,7 @@ performs an automatic `--fix` pass.
 
 - `local-architecture/no-infrastructure-to-modules-imports`
   Blocks infrastructure importing `src/modules/**` implementation files.
-  Module-owned `*.contract.ts` files are allowed as boundary-contract exceptions.
+  The only modules-layer exception is a module-owned `*.contract.ts` boundary contract.
 
 - `local-architecture/no-cross-domain-modules-imports`
   Blocks business-domain modules importing other business-domain modules.
@@ -59,11 +59,11 @@ performs an automatic `--fix` pass.
 
 - `local-architecture/no-cross-domain-usecases-imports`
   Blocks usecases importing other usecase bounded contexts.
-  Same-domain usecase module wiring remains allowed.
+  The shared transaction runner contract is the current allowed common boundary exception.
 
 - `local-architecture/no-types-to-core-imports`
   Blocks `src/types/**` from importing `src/core/**`.
-  There is no current allowlist for this rule.
+  Types is the stable shared contract layer and must not depend on core implementation semantics.
 
 - `no-restricted-imports`
   Blocks direct `src/types/**`, `@src/types/**`, and `**/src/types/**` imports.

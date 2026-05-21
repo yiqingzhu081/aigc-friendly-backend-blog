@@ -1,4 +1,4 @@
-<!-- 文件位置: plans/account-generic-identity-plan.md -->
+<!-- 文件位置: docs/deprecated/account-generic-identity-plan.md -->
 
 # Account Generic Identity Plan
 

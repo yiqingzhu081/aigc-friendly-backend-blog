@@ -33,7 +33,8 @@ Detailed or fast-changing rules belong in `docs/`.
 
 ## Layer Ownership
 
-- `adapters`: protocol entry only. Parse input, call usecases, map output. No business orchestration, no modules/infrastructure imports.
+- `adapters`: protocol entry only. Parse input, call usecases, map output. No business orchestration and no modules/infrastructure runtime imports.
+  Type-only imports from same-domain `src/modules/<bounded-context>/<bounded-context>.types.ts` files are allowed when the detailed adapter rules allow them.
 - `usecases`: business orchestration, write semantics, permissions for write flows, transactions, and cross-domain coordination.
 - `modules`: same-domain reusable services, QueryServices, repository/entity encapsulation, DI assembly. No cross-domain business orchestration.
 - `QueryService`: modules-layer read side only. It may read, authorize read visibility, and normalize output; it must not write and is called by usecases, not adapters.

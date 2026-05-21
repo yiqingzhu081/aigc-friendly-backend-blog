@@ -64,9 +64,9 @@ For boundary contract naming, see docs/common/boundary-contract.rules.md.
 
 ## 当前 Account Policy 口径
 
-- `profile-completion.policy.ts` 承载首次资料补全相关的纯判断。
 - `role-access.policy.ts` 承载角色展开与角色判断。
 - `user-info-visibility.policy.ts` 承载 userInfo 可见性的纯判断。
+- `parse-staff-id.ts` 承载 staffId 解析的纯判断。
 - Account 状态迁移、访问摘要投影、注册中间态不变量只有在出现稳定重复或明确聚合不变量证据时，才进入 `core/account`。
 
 ## Legacy 兼容口径
