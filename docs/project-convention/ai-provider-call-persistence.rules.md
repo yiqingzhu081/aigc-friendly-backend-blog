@@ -24,6 +24,16 @@ Source of truth: This file defines provider-call record rules; code examples els
 - 本表不是内容审计表。
 - 不承载 prompt、text、metadata、outputText、vector 等内容字段。
 
+## 表名治理说明
+
+- 当前物理表名仍是历史复数名 `ai_provider_call_records`。
+- 该命名不是新表模板。
+- 数据库表名目标口径统一使用单数，详见
+  [database-baseline-delivery.rules.md](./database-baseline-delivery.rules.md)。
+- 最终收口时，本表应迁移为单数表名 `ai_provider_call_record`，并同步更新 entity、
+  baseline migration、索引/外键引用、raw SQL、空库校验和相关测试。
+- 该迁移排在分层治理修复的最后；在迁移前，代码仍必须按当前复数物理表名正确识别唯一约束。
+
 ## 与 `AsyncTaskRecord` 的边界
 
 - `AsyncTaskRecord` 记录异步任务生命周期。

@@ -140,6 +140,29 @@ Source of truth: This file defines baseline delivery rules; code examples elsewh
 
   正式环境、预发环境、部署建库流程不得依赖 `synchronize` 直接改库。
 
+  ### Rule 6. Table Name 统一使用单数
+
+  数据库表名统一使用单数 snake_case。
+
+  适用范围：
+
+  - `@Entity('<table_name>')`
+  - baseline migration 中的 `CREATE TABLE`
+  - 外键、唯一索引、普通索引、raw SQL、空库校验脚本中的表名引用
+  - 文档中描述物理表名的地方
+
+  规则：
+
+  - 新增表必须使用单数表名。
+  - 修改已有 schema 时，应优先把复数表名收敛为单数表名。
+  - 复数表名属于历史命名债务，不得作为新表命名模板。
+  - 若当前任务不是数据库命名收口，不应顺手重命名既有表。
+  - 表名重命名必须同时更新 entity、baseline migration、索引/外键引用、raw SQL、空库校验和相关测试。
+
+  当前项目仍存在少量复数物理表名。
+  这些表名先按现状维护，最终在数据库命名收口批次统一迁移。
+  该批次应排在分层治理修复的最后，避免在架构迁移过程中同时扰动 schema 命名和行为验证。
+
   ## 推荐工作流
 
   ### 日常开发

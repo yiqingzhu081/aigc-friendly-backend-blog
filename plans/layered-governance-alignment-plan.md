@@ -333,6 +333,12 @@ P0 决策闸口：
     transaction context，内部按需解包 TypeORM manager。
   - 移除 `AccountTransactionManager`、`VerificationRecordTransactionManager`、
     `AsyncTaskRecordTransactionManager` 与 service 级 `runTransaction()`。
+- 最后收口批次待办：
+  - 数据库物理表名统一收敛为单数 snake_case。
+  - 当前已确认 `ai_provider_call_records` 是历史复数命名债务；修复时目标表名为
+    `ai_provider_call_record`。
+  - 该批次必须同步 entity、baseline migration、索引/外键引用、raw SQL、空库校验和相关测试。
+  - 在该批次前，代码仍按当前物理表名维护，避免提前扰动唯一约束识别和空库建表验证。
 
 验证：
 
@@ -380,6 +386,7 @@ P0 决策闸口：
 - 本计划记录 P0-P3b 完成状态。
 - 若发现长期治理尾项，拆到单独 followup。
 - 若某些边界暂时只能人工 review，在 `docs/common/eslint-architecture-rules.md` 明确。
+- 数据库表名单数化作为最后治理尾项收口；若本轮不执行，必须保留为明确 followup。
 
 验收：
 
@@ -394,6 +401,7 @@ P0 决策闸口：
 - D1：旧项目只补通用 current API 文档；教育业务 current API 文档排除。
 - D2：先补齐 aggregate/entity rule 文档与人工扫描命令；是否新增 lint 规则放到 P2 决策。
 - D3：账号收口计划保留为完成计划，当前主线切换为本分层治理对齐计划。
+- D4：数据库物理表名统一使用单数；既有复数表名作为最后收口项处理，不在中途顺手改。
 
 ## 第一轮建议
 

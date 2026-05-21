@@ -58,6 +58,9 @@ Source of truth: This file defines Entity purity rules; examples elsewhere must 
 - 迁出时新建 adapter DTO，不复用 Entity class。
 - 若现有 API 依赖 Entity 字段名，adapter DTO 保持对外字段兼容。
 - 迁移不得改变数据库字段、索引或迁移语义，除非当前任务明确要求。
+- `@Entity('<table_name>')` 的物理表名统一使用单数 snake_case。
+  详细规则与历史复数表名处理口径见
+  `docs/project-convention/database-baseline-delivery.rules.md`。
 
 ## Code Review 必查项
 

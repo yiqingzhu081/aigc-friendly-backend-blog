@@ -66,6 +66,7 @@
 
   - Database baseline / first-release schema delivery:
     - `docs/project-convention/database-baseline-delivery.rules.md`
+    - Also read this when changing physical table names in `@Entity()` or baseline migrations.
 
   - E2E execution model:
     - `docs/project-convention/e2e-test-groups.md`
@@ -119,7 +120,7 @@
   - `queue-identifiers.rules`: `jobId` vs `dedupKey` vs `traceId`
   - `ai-task-lifecycle-audit.rules`: async task audit semantics
   - `ai-provider-call-persistence.rules`: provider-call record semantics
-  - `database-baseline-delivery.rules`: first-release baseline migration rules
+  - `database-baseline-delivery.rules`: first-release baseline migration and table naming rules
   - `e2e-test-groups.md`: `core` / `worker` / `smoke` test routing
   - `input-field-design.md`: input-normalization design
   - `input-normalize-v1-boundaries.md`: primitive normalize boundaries
