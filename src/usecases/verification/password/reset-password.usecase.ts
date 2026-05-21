@@ -3,6 +3,7 @@
 import type { PersistenceTransactionContext } from '@app-types/common/transaction.types';
 import { Injectable } from '@nestjs/common';
 import { AccountService } from '@src/modules/account/base/services/account.service';
+import { AccountQueryService } from '@src/modules/account/queries/account.query.service';
 import {
   ACCOUNT_ERROR,
   DomainError,
@@ -42,6 +43,7 @@ export interface ResetPasswordUsecaseResult {
 export class ResetPasswordUsecase {
   constructor(
     private readonly accountService: AccountService,
+    private readonly accountQueryService: AccountQueryService,
     private readonly passwordPolicyService: PasswordPolicyService,
   ) {}
 
@@ -65,7 +67,10 @@ export class ResetPasswordUsecase {
       }
 
       // 查找目标账户
-      const account = await this.accountService.findOneById(targetAccountId);
+      const account = await this.accountQueryService.findAccountSnapshotById({
+        accountId: targetAccountId,
+        transactionContext,
+      });
       if (!account) {
         throw new DomainError(ACCOUNT_ERROR.ACCOUNT_NOT_FOUND, '目标账户不存在');
       }
@@ -77,14 +82,11 @@ export class ResetPasswordUsecase {
       );
 
       // 更新账户密码，使用传入的事务上下文（如果有）
-      await this.accountService.updateAccount(
-        targetAccountId,
-        {
-          loginPassword: hashedPassword,
-          updatedAt: new Date(),
-        },
+      await this.accountService.updateAccountPasswordHash({
+        accountId: targetAccountId,
+        passwordHash: hashedPassword,
         transactionContext,
-      );
+      });
 
       return {
         accountId: targetAccountId,

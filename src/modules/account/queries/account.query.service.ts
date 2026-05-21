@@ -12,6 +12,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { getTypeOrmEntityManager } from '@src/infrastructure/database/transaction/typeorm-persistence-transaction-context';
 import { Repository } from 'typeorm';
+import type { AccountLoginBootstrapSnapshot, AccountSnapshot } from '../account.types';
 import { AccountEntity } from '../base/entities/account.entity';
 import { UserInfoEntity } from '../base/entities/user-info.entity';
 
@@ -47,6 +48,15 @@ export class AccountQueryService {
     }
 
     return this.toUserAccountView(account);
+  }
+
+  async findAccountSnapshotById(params: {
+    accountId: number;
+    transactionContext?: PersistenceTransactionContext;
+  }): Promise<AccountSnapshot | null> {
+    const accountRepository = this.getAccountRepository(params.transactionContext);
+    const account = await accountRepository.findOne({ where: { id: params.accountId } });
+    return account ? this.toUserAccountView(account) : null;
   }
 
   toUserAccountView(account: AccountEntity): UserAccountView {
@@ -85,6 +95,47 @@ export class AccountQueryService {
       return this.maskToBasic(view);
     }
     return view;
+  }
+
+  async getLoginBootstrapSnapshot(params: {
+    accountId: number;
+    transactionContext?: PersistenceTransactionContext;
+  }): Promise<AccountLoginBootstrapSnapshot> {
+    const accountRepository = this.getAccountRepository(params.transactionContext);
+    const account = await accountRepository.findOne({ where: { id: params.accountId } });
+    if (!account) {
+      throw new DomainError(ACCOUNT_ERROR.ACCOUNT_NOT_FOUND, '账户不存在');
+    }
+
+    const userInfo = await this.findUserInfoByAccountId(
+      params.accountId,
+      params.transactionContext,
+    );
+    if (!userInfo) {
+      throw new DomainError(ACCOUNT_ERROR.USER_INFO_NOT_FOUND, '用户信息不存在');
+    }
+
+    return {
+      account: {
+        id: account.id,
+        loginName: account.loginName,
+        loginEmail: account.loginEmail,
+        status: account.status,
+        identityHint: account.identityHint,
+        createdAt: account.createdAt,
+        updatedAt: account.updatedAt,
+      },
+      userInfo: {
+        id: userInfo.id,
+        accountId: userInfo.accountId,
+        nickname: userInfo.nickname,
+        avatarUrl: userInfo.avatarUrl,
+        accessGroup: userInfo.accessGroup ?? null,
+        metaDigest: userInfo.metaDigest ?? null,
+        createdAt: userInfo.createdAt,
+        updatedAt: userInfo.updatedAt,
+      },
+    };
   }
 
   async getUserInfoViewStrict(params: {
@@ -203,12 +254,27 @@ export class AccountQueryService {
     accountId: number,
     transactionContext?: PersistenceTransactionContext,
   ): Promise<UserInfoEntity | null> {
-    const manager = transactionContext ? getTypeOrmEntityManager(transactionContext) : undefined;
-    const repository = manager ? manager.getRepository(UserInfoEntity) : this.userInfoRepository;
+    const repository = this.getUserInfoRepository(transactionContext);
     return await repository.findOne({
       where: { accountId },
       relations: ['account'],
     });
+  }
+
+  private getAccountRepository(
+    transactionContext?: PersistenceTransactionContext,
+  ): Repository<AccountEntity> {
+    return transactionContext
+      ? getTypeOrmEntityManager(transactionContext).getRepository(AccountEntity)
+      : this.accountRepository;
+  }
+
+  private getUserInfoRepository(
+    transactionContext?: PersistenceTransactionContext,
+  ): Repository<UserInfoEntity> {
+    return transactionContext
+      ? getTypeOrmEntityManager(transactionContext).getRepository(UserInfoEntity)
+      : this.userInfoRepository;
   }
 
   private normalizeTags(tags: unknown): string[] | null {

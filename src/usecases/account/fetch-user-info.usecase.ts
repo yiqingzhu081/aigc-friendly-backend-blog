@@ -8,7 +8,6 @@ import { ACCOUNT_ERROR, DomainError } from '@core/common/errors';
 import { AccountSecurityService } from '@modules/account/base/services/account-security.service';
 import { AccountQueryService } from '@modules/account/queries/account.query.service';
 import { Injectable } from '@nestjs/common';
-import { AccountService } from '@src/modules/account/base/services/account.service';
 
 // 移除本地的 UserInfoView 定义，使用统一的类型定义
 
@@ -28,7 +27,6 @@ export interface CompleteUserData {
 @Injectable()
 export class FetchUserInfoUsecase {
   constructor(
-    private readonly accountService: AccountService,
     private readonly accountQueryService: AccountQueryService,
     private readonly accountSecurityService: AccountSecurityService,
   ) {}
@@ -89,30 +87,21 @@ export class FetchUserInfoUsecase {
   async executeForLoginFlow(params: { accountId: number }): Promise<CompleteUserData> {
     const { accountId } = params;
 
-    // 1. 获取账户信息
-    const account = await this.accountService.findOneById(accountId);
-    if (!account) {
-      throw new DomainError(ACCOUNT_ERROR.ACCOUNT_NOT_FOUND, '账户不存在');
-    }
+    // 1. 获取登录安全快照
+    const loginSnapshot = await this.accountQueryService.getLoginBootstrapSnapshot({ accountId });
 
-    // 2. 获取用户详细信息
-    const userInfo = await this.accountService.findUserInfoByAccountId(accountId);
-    if (!userInfo) {
-      throw new DomainError(ACCOUNT_ERROR.USER_INFO_NOT_FOUND, '用户信息不存在');
-    }
-
-    // 3. 执行安全验证（metaDigest 与 accessGroup 比对）
+    // 2. 执行安全验证（metaDigest 与 accessGroup 比对）
     const securityResult = this.accountSecurityService.checkAndHandleAccountSecurity({
-      ...account,
-      userInfo,
+      id: loginSnapshot.account.id,
+      userInfo: loginSnapshot.userInfo,
     });
 
-    // 4. 如果账号被暂停，抛出错误
+    // 3. 如果账号被暂停，抛出错误
     if (securityResult.wasSuspended) {
       throw new DomainError(ACCOUNT_ERROR.ACCOUNT_SUSPENDED, '账户因安全问题已被暂停');
     }
 
-    // 5. 构建用户信息视图
+    // 4. 构建用户信息视图
     const userInfoView = await this.accountQueryService.getUserInfoViewStrict({ accountId });
 
     return {

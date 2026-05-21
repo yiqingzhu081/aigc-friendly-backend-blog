@@ -2,10 +2,10 @@
 import { AccountStatus, IdentityTypeEnum } from '@app-types/models/account.types';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import type { AccountSecuritySubjectSnapshot } from '@src/modules/account/account.types';
 import { PinoLogger } from 'nestjs-pino';
 import { Repository } from 'typeorm';
 import { AccountEntity } from '../entities/account.entity';
-import { UserInfoEntity } from '../entities/user-info.entity';
 
 @Injectable()
 export class AccountSecurityService {
@@ -23,7 +23,7 @@ export class AccountSecurityService {
    * @param account 账号实体（包含关联的用户信息）
    * @returns 验证结果和真实的 accessGroup
    */
-  validateAccessGroupConsistency(account: AccountEntity & { userInfo: UserInfoEntity }): {
+  validateAccessGroupConsistency(account: AccountSecuritySubjectSnapshot): {
     isValid: boolean;
     realAccessGroup?: IdentityTypeEnum[];
     shouldSuspend: boolean;
@@ -162,7 +162,7 @@ export class AccountSecurityService {
    * @param account 账号实体（包含 userInfo）
    * @returns 处理结果
    */
-  checkAndHandleAccountSecurity(account: AccountEntity & { userInfo: UserInfoEntity }): {
+  checkAndHandleAccountSecurity(account: AccountSecuritySubjectSnapshot): {
     isValid: boolean;
     wasSuspended: boolean;
     realAccessGroup?: IdentityTypeEnum[];

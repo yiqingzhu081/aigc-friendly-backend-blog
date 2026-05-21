@@ -8,6 +8,7 @@ import {
 } from '@app-types/models/account.types';
 import { ACCOUNT_ERROR, AUTH_ERROR, DomainError } from '@core/common/errors/domain-error';
 import { AccountSecurityService } from '@modules/account/base/services/account-security.service';
+import { AccountQueryService } from '@modules/account/queries/account.query.service';
 import { AuthService } from '@modules/auth/auth.service';
 import {
   LoginBootstrapQueryService,
@@ -27,6 +28,7 @@ import { PinoLogger } from 'nestjs-pino';
 export class ExecuteLoginFlowUsecase {
   constructor(
     private readonly accountService: AccountService,
+    private readonly accountQueryService: AccountQueryService,
     private readonly accountSecurityService: AccountSecurityService,
     private readonly authService: AuthService,
     private readonly tokenHelper: TokenHelper,
@@ -91,33 +93,22 @@ export class ExecuteLoginFlowUsecase {
    * @returns 用户数据集合
    */
   private async fetchUserData(accountId: number): Promise<LoginUserDataCollection> {
-    const account = await this.accountService.findOneById(accountId);
-    if (!account) {
-      throw new DomainError(ACCOUNT_ERROR.ACCOUNT_NOT_FOUND, '账户不存在');
-    }
-
-    const rawUserInfo = await this.accountService.findUserInfoByAccountId(accountId);
-    if (!rawUserInfo) {
-      throw new DomainError(ACCOUNT_ERROR.USER_INFO_NOT_FOUND, '用户信息不存在');
-    }
+    const loginSnapshot = await this.accountQueryService.getLoginBootstrapSnapshot({ accountId });
 
     const securityResult = this.accountSecurityService.checkAndHandleAccountSecurity({
-      ...account,
-      userInfo: rawUserInfo,
+      id: loginSnapshot.account.id,
+      userInfo: loginSnapshot.userInfo,
     });
     if (securityResult.wasSuspended) {
       throw new DomainError(ACCOUNT_ERROR.ACCOUNT_SUSPENDED, '账户因安全问题已被暂停');
     }
 
     // 检查账户状态
-    if (account.status !== AccountStatus.ACTIVE) {
+    if (loginSnapshot.account.status !== AccountStatus.ACTIVE) {
       throw new DomainError(AUTH_ERROR.ACCOUNT_INACTIVE, '账户未激活');
     }
 
-    return this.loginBootstrapQueryService.toLoginUserDataCollection({
-      account,
-      userInfo: rawUserInfo,
-    });
+    return this.loginBootstrapQueryService.toLoginUserDataCollection(loginSnapshot);
   }
 
   /**
