@@ -32,7 +32,7 @@ export class ResetPasswordHandler implements VerificationFlowHandler<PasswordRes
    * @returns 密码重置结果
    */
   async handle(context: VerificationFlowContext): Promise<PasswordResetHandlerResult> {
-    const { recordView, resetPassword, manager } = context;
+    const { recordView, resetPassword, transactionContext } = context;
 
     // 从上下文载荷中获取新密码
     const newPassword = resetPassword?.newPassword;
@@ -48,7 +48,7 @@ export class ResetPasswordHandler implements VerificationFlowHandler<PasswordRes
       const recordTargetAccountId =
         await this.verificationRecordService.getTargetAccountIdByRecordId({
           recordId: recordView.id,
-          manager,
+          transactionContext,
         });
       if (!recordTargetAccountId) {
         throw new DomainError(ACCOUNT_ERROR.ACCOUNT_NOT_FOUND, '验证记录中未找到目标账户');
@@ -56,12 +56,12 @@ export class ResetPasswordHandler implements VerificationFlowHandler<PasswordRes
       targetAccountId = recordTargetAccountId;
     }
 
-    // 调用密码重置用例，传递事务管理器
+    // 调用密码重置用例，传递事务上下文
     const usecaseResult: ResetPasswordUsecaseResult = await this.resetPasswordUsecase.execute({
       recordId: recordView.id,
       targetAccountId,
       newPassword,
-      manager, // 传递事务管理器
+      transactionContext,
     });
 
     // 返回明确的结果结构，使用 usecase 返回的 recordId

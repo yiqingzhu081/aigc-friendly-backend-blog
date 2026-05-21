@@ -1,9 +1,9 @@
 // src/usecases/verification/types/consume.types.ts
 
 import { AudienceTypeEnum } from '@app-types/models/account.types';
+import type { PersistenceTransactionContext } from '@app-types/common/transaction.types';
 import { VerificationRecordType } from '@app-types/models/verification-record.types';
 import { VerificationRecordView } from '@src/modules/verification-record/services/verification-read.service';
-import type { VerificationRecordTransactionManager } from '@src/modules/verification-record/verification-record.service';
 import { PasswordResetHandlerResult } from '@src/usecases/verification/password/reset-password-result.types';
 
 /**
@@ -30,8 +30,8 @@ export interface ConsumeVerificationFlowParams {
   email?: string;
   /** 手机号码（可选，用于上下文匹配） */
   phone?: string;
-  /** 可选的事务管理器 */
-  manager?: VerificationRecordTransactionManager;
+  /** 可选的事务上下文 */
+  transactionContext?: PersistenceTransactionContext;
   /** 密码重置载荷（仅用于密码重置类型） */
   resetPassword?: ResetPasswordPayload;
 }
@@ -44,8 +44,8 @@ export interface VerificationFlowContext {
   recordView: VerificationRecordView;
   /** 消费者账号 ID */
   consumedByAccountId?: number;
-  /** 事务管理器 */
-  manager: VerificationRecordTransactionManager;
+  /** 事务上下文 */
+  transactionContext: PersistenceTransactionContext;
   /** 密码重置载荷（仅用于密码重置类型） */
   resetPassword?: ResetPasswordPayload;
 }

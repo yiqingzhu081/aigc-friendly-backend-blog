@@ -1,5 +1,6 @@
 // src/modules/account/base/services/account.service.ts
 
+import type { PersistenceTransactionContext } from '@app-types/common/transaction.types';
 import {
   AccountStatus,
   AccountWithAccessGroup,
@@ -15,15 +16,14 @@ import { normalizeEmail } from '@core/common/normalize/normalize.helper';
 import { LegacyPasswordCryptoHelper } from '@modules/common/password/legacy-password-crypto.helper';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, Repository } from 'typeorm';
+import { getTypeOrmEntityManager } from '@src/infrastructure/database/transaction/typeorm-persistence-transaction-context';
+import { Repository } from 'typeorm';
 
 // ✅ base 层实体（始终存在）
 import { AccountEntity } from '../entities/account.entity';
 import { UserInfoEntity } from '../entities/user-info.entity';
 
 import { AccountSecurityService } from './account-security.service';
-
-export type AccountTransactionManager = EntityManager;
 
 export interface AccountCreateData {
   loginName?: string | null;
@@ -99,8 +99,11 @@ export class AccountService {
   }
 
   /** 根据 ID 查询账户 */
-  async findOneById(id: number, manager?: EntityManager): Promise<AccountEntity | null> {
-    const repository = manager ? manager.getRepository(AccountEntity) : this.accountRepository;
+  async findOneById(
+    id: number,
+    transactionContext?: PersistenceTransactionContext,
+  ): Promise<AccountEntity | null> {
+    const repository = this.getAccountRepository(transactionContext);
     return await repository.findOne({ where: { id } });
   }
 
@@ -128,9 +131,9 @@ export class AccountService {
   /** 根据账户 ID 查找用户信息（带 account 关系） */
   async findUserInfoByAccountId(
     accountId: number,
-    manager?: EntityManager,
+    transactionContext?: PersistenceTransactionContext,
   ): Promise<UserInfoEntity | null> {
-    const repository = manager ? manager.getRepository(UserInfoEntity) : this.userInfoRepository;
+    const repository = this.getUserInfoRepository(transactionContext);
     return await repository.findOne({
       where: { accountId },
       relations: ['account'],
@@ -145,20 +148,20 @@ export class AccountService {
   /** 创建账户实体（不落库） */
   createAccountEntity(params: {
     accountData: AccountCreateData;
-    manager?: EntityManager;
+    transactionContext?: PersistenceTransactionContext;
   }): AccountEntity {
-    const { accountData, manager } = params;
-    const repository = manager ? manager.getRepository(AccountEntity) : this.accountRepository;
+    const { accountData, transactionContext } = params;
+    const repository = this.getAccountRepository(transactionContext);
     return repository.create(accountData);
   }
 
   /** 落库账户实体 */
   async saveAccount(params: {
     account: AccountEntity;
-    manager?: EntityManager;
+    transactionContext?: PersistenceTransactionContext;
   }): Promise<AccountEntity> {
-    const { account, manager } = params;
-    const repository = manager ? manager.getRepository(AccountEntity) : this.accountRepository;
+    const { account, transactionContext } = params;
+    const repository = this.getAccountRepository(transactionContext);
     return await repository.save(account);
   }
 
@@ -166,20 +169,23 @@ export class AccountService {
   async updateAccount(
     id: number,
     updateData: Partial<AccountEntity>,
-    manager?: EntityManager,
+    transactionContext?: PersistenceTransactionContext,
   ): Promise<void> {
-    const repository = manager ? manager.getRepository(AccountEntity) : this.accountRepository;
+    const repository = this.getAccountRepository(transactionContext);
     await repository.update(id, updateData);
   }
 
   /**
    * 显式锁定账户以避免并发覆盖
    * @param accountId 账户 ID
-   * @param manager 事务管理器
+   * @param transactionContext 事务上下文
    * @returns 锁定的账户实体
    */
-  async lockByIdForUpdate(accountId: number, manager: EntityManager): Promise<AccountEntity> {
-    const repository = manager.getRepository(AccountEntity);
+  async lockByIdForUpdate(
+    accountId: number,
+    transactionContext: PersistenceTransactionContext,
+  ): Promise<AccountEntity> {
+    const repository = this.getAccountRepository(transactionContext);
     const account = await repository
       .createQueryBuilder('account')
       .where('account.id = :accountId', { accountId })
@@ -196,20 +202,20 @@ export class AccountService {
   /** 创建用户信息实体（不落库） */
   createUserInfoEntity(params: {
     userInfoData: UserInfoCreateData;
-    manager?: EntityManager;
+    transactionContext?: PersistenceTransactionContext;
   }): UserInfoEntity {
-    const { userInfoData, manager } = params;
-    const repository = manager ? manager.getRepository(UserInfoEntity) : this.userInfoRepository;
+    const { userInfoData, transactionContext } = params;
+    const repository = this.getUserInfoRepository(transactionContext);
     return repository.create(userInfoData);
   }
 
   /** 落库用户信息实体 */
   async saveUserInfo(params: {
     userInfo: UserInfoEntity;
-    manager?: EntityManager;
+    transactionContext?: PersistenceTransactionContext;
   }): Promise<UserInfoEntity> {
-    const { userInfo, manager } = params;
-    const repository = manager ? manager.getRepository(UserInfoEntity) : this.userInfoRepository;
+    const { userInfo, transactionContext } = params;
+    const repository = this.getUserInfoRepository(transactionContext);
     return await repository.save(userInfo);
   }
 
@@ -219,10 +225,10 @@ export class AccountService {
   async updateUserInfoAccessGroup(params: {
     accountId: number;
     accessGroup: IdentityTypeEnum[];
-    manager: EntityManager;
+    transactionContext: PersistenceTransactionContext;
   }): Promise<{ isUpdated: boolean }> {
-    const { accountId, accessGroup, manager } = params;
-    const repository = manager.getRepository(UserInfoEntity);
+    const { accountId, accessGroup, transactionContext } = params;
+    const repository = this.getUserInfoRepository(transactionContext);
     const userInfo = await repository.findOne({ where: { accountId } });
     if (!userInfo) {
       throw new DomainError(ACCOUNT_ERROR.USER_INFO_NOT_FOUND, '用户信息不存在');
@@ -240,11 +246,6 @@ export class AccountService {
     userInfo.updatedAt = new Date();
     await repository.save(userInfo);
     return { isUpdated: true };
-  }
-
-  /** 事务执行（使用 AccountEntity 的 manager） */
-  async runTransaction<T>(callback: (manager: EntityManager) => Promise<T>): Promise<T> {
-    return await this.accountRepository.manager.transaction(callback);
   }
 
   // =========================================================
@@ -288,6 +289,22 @@ export class AccountService {
     }
 
     return normalizedPassword;
+  }
+
+  private getAccountRepository(
+    transactionContext?: PersistenceTransactionContext,
+  ): Repository<AccountEntity> {
+    return transactionContext
+      ? getTypeOrmEntityManager(transactionContext).getRepository(AccountEntity)
+      : this.accountRepository;
+  }
+
+  private getUserInfoRepository(
+    transactionContext?: PersistenceTransactionContext,
+  ): Repository<UserInfoEntity> {
+    return transactionContext
+      ? getTypeOrmEntityManager(transactionContext).getRepository(UserInfoEntity)
+      : this.userInfoRepository;
   }
 
   // =========================================================

@@ -6,8 +6,12 @@ import { UserInfoView } from '@app-types/models/auth.types';
 import { Gender, UserState, type GeographicInfo } from '@app-types/models/user-info.types';
 import { hasRole } from '@core/account/policy/role-access.policy';
 import { ACCOUNT_ERROR, DomainError, PERMISSION_ERROR } from '@core/common/errors/domain-error';
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { AccountService } from '@src/modules/account/base/services/account.service';
+import {
+  TRANSACTION_RUNNER,
+  type TransactionRunner,
+} from '@src/usecases/common/ports/transaction-runner.contract';
 import { FetchUserInfoUsecase } from './fetch-user-info.usecase';
 import {
   normalizeVisibleBirthDateInput,
@@ -72,6 +76,8 @@ export class UpdateVisibleUserInfoUsecase {
   constructor(
     private readonly accountService: AccountService,
     private readonly fetchUserInfoUsecase: FetchUserInfoUsecase,
+    @Inject(TRANSACTION_RUNNER)
+    private readonly transactionRunner: TransactionRunner,
   ) {}
 
   /**
@@ -95,9 +101,12 @@ export class UpdateVisibleUserInfoUsecase {
     }
 
     // 事务编排：读取 → 校验 → 幂等 → 更新 → 回读视图
-    const result = await this.accountService.runTransaction<UpdateVisibleUserInfoResult>(
-      async (manager) => {
-        const current = await this.accountService.findUserInfoByAccountId(targetAccountId, manager);
+    const result = await this.transactionRunner.run<UpdateVisibleUserInfoResult>(
+      async (transactionContext) => {
+        const current = await this.accountService.findUserInfoByAccountId(
+          targetAccountId,
+          transactionContext,
+        );
         if (!current) {
           throw new DomainError(ACCOUNT_ERROR.USER_INFO_NOT_FOUND, '用户信息不存在');
         }
@@ -120,7 +129,7 @@ export class UpdateVisibleUserInfoUsecase {
         if (!hasUserInfoUpdate && !shouldUpdateIdentityHint) {
           const view = await this.fetchUserInfoUsecase.executeStrict({
             accountId: targetAccountId,
-            manager,
+            transactionContext,
           });
           return { view, isUpdated: false };
         }
@@ -129,16 +138,19 @@ export class UpdateVisibleUserInfoUsecase {
         if (hasUserInfoUpdate) {
           // 应用更新并保存
           this.applyPatchToEntity(current, sanitized);
-          await this.accountService.saveUserInfo({ userInfo: current, manager });
+          await this.accountService.saveUserInfo({ userInfo: current, transactionContext });
         }
         if (shouldUpdateIdentityHint && resolvedIdentityHint) {
-          const account = await this.accountService.lockByIdForUpdate(targetAccountId, manager);
+          const account = await this.accountService.lockByIdForUpdate(
+            targetAccountId,
+            transactionContext,
+          );
           const currentIdentityHint = this.normalizeIdentityHint(account.identityHint);
           if (currentIdentityHint !== resolvedIdentityHint) {
             await this.accountService.updateAccount(
               targetAccountId,
               { identityHint: resolvedIdentityHint },
-              manager,
+              transactionContext,
             );
             identityHintChanged = true;
           }
@@ -146,7 +158,7 @@ export class UpdateVisibleUserInfoUsecase {
 
         const view = await this.fetchUserInfoUsecase.executeStrict({
           accountId: targetAccountId,
-          manager,
+          transactionContext,
         });
         return { view, isUpdated: hasUserInfoUpdate || identityHintChanged };
       },
@@ -482,7 +494,11 @@ export interface UpdateAccessGroupResult {
 
 @Injectable()
 export class UpdateAccessGroupUsecase {
-  constructor(private readonly accountService: AccountService) {}
+  constructor(
+    private readonly accountService: AccountService,
+    @Inject(TRANSACTION_RUNNER)
+    private readonly transactionRunner: TransactionRunner,
+  ) {}
 
   /**
    * 执行访问组更新
@@ -518,12 +534,15 @@ export class UpdateAccessGroupUsecase {
       throw new DomainError(ACCOUNT_ERROR.OPERATION_NOT_SUPPORTED, '无法生成身份提示');
     }
 
-    return await this.accountService.runTransaction(async (manager) => {
-      const account = await this.accountService.lockByIdForUpdate(targetAccountId, manager);
+    return await this.transactionRunner.run(async (transactionContext) => {
+      const account = await this.accountService.lockByIdForUpdate(
+        targetAccountId,
+        transactionContext,
+      );
       const accessGroupUpdate = await this.accountService.updateUserInfoAccessGroup({
         accountId: targetAccountId,
         accessGroup: normalizedAccessGroup,
-        manager,
+        transactionContext,
       });
       const currentIdentityHint = this.normalizeIdentityHint(account.identityHint);
       const identityHintChanged = currentIdentityHint !== finalIdentityHint;
@@ -532,7 +551,7 @@ export class UpdateAccessGroupUsecase {
         await this.accountService.updateAccount(
           targetAccountId,
           { identityHint: finalIdentityHint },
-          manager,
+          transactionContext,
         );
       }
 

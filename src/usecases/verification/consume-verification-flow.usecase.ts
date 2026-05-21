@@ -1,5 +1,6 @@
 // src/usecases/verification/consume-verification-flow.usecase.ts
 
+import type { PersistenceTransactionContext } from '@app-types/common/transaction.types';
 import {
   VerificationRecordType,
   VerificationRecordStatus,
@@ -9,13 +10,17 @@ import {
   PERMISSION_ERROR,
   VERIFICATION_RECORD_ERROR,
 } from '@core/common/errors/domain-error';
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ConsumableQueryService } from '@src/modules/verification-record/queries/consumable.query.service';
 import {
   VerificationRecordConsumeTargetConstraint,
   VerificationRecordService,
   VerificationRecordValidationSnapshot,
 } from '@src/modules/verification-record/verification-record.service';
+import {
+  TRANSACTION_RUNNER,
+  type TransactionRunner,
+} from '@src/usecases/common/ports/transaction-runner.contract';
 import { ResetPasswordHandler } from './password/reset-password.handler';
 import {
   ConsumeVerificationFlowParams,
@@ -46,6 +51,8 @@ export class ConsumeVerificationFlowUsecase {
     private readonly verificationRecordService: VerificationRecordService,
     private readonly consumableQueryService: ConsumableQueryService,
     private readonly resetPasswordHandler: ResetPasswordHandler,
+    @Inject(TRANSACTION_RUNNER)
+    private readonly transactionRunner: TransactionRunner,
   ) {
     this.registerHandler(this.resetPasswordHandler);
   }
@@ -79,14 +86,20 @@ export class ConsumeVerificationFlowUsecase {
    * @returns 验证流程结果
    */
   async execute(params: ConsumeVerificationFlowParams): Promise<VerificationFlowResult> {
-    const { token, consumedByAccountId, expectedType, manager, resetPassword } = params;
+    const { token, consumedByAccountId, expectedType, transactionContext, resetPassword } = params;
 
-    return this.verificationRecordService.runTransaction(async (transactionManager) => {
-      const activeManager = manager || transactionManager;
-
+    const run = async (
+      activeTransactionContext: PersistenceTransactionContext,
+    ): Promise<VerificationFlowResult> => {
       // 第一步：在事务中重新验证并获取验证记录视图
       // 这里需要重新验证是因为从预读到消费之间可能有状态变化
-      const recordView = await this.consumableQueryService.findConsumableRecord(token);
+      const recordView = await this.consumableQueryService.findConsumableRecord(
+        token,
+        params.audience,
+        params.email,
+        params.phone,
+        activeTransactionContext,
+      );
 
       if (!recordView) {
         throw new DomainError(
@@ -112,7 +125,7 @@ export class ConsumeVerificationFlowUsecase {
       const context: VerificationFlowContext = {
         recordView,
         consumedByAccountId,
-        manager: activeManager,
+        transactionContext: activeTransactionContext,
         resetPassword, // 传递密码重置载荷
       };
 
@@ -124,11 +137,15 @@ export class ConsumeVerificationFlowUsecase {
         token,
         consumedByAccountId,
         expectedType: recordView.type,
-        manager: activeManager,
+        transactionContext: activeTransactionContext,
       });
 
       return businessResult;
-    });
+    };
+
+    return transactionContext
+      ? await run(transactionContext)
+      : await this.transactionRunner.run(run);
   }
 
   /**
@@ -169,9 +186,11 @@ export class ConsumeVerificationFlowUsecase {
     token: string;
     consumedByAccountId?: number;
     expectedType?: VerificationRecordType;
-    manager?: Parameters<VerificationRecordService['consumeRecord']>[0]['manager'];
+    transactionContext?: Parameters<
+      VerificationRecordService['consumeRecord']
+    >[0]['transactionContext'];
   }): Promise<void> {
-    const { token, consumedByAccountId, expectedType, manager } = params;
+    const { token, consumedByAccountId, expectedType, transactionContext } = params;
     const now = new Date();
     const targetConstraint = this.resolveTargetConstraint({ consumedByAccountId, expectedType });
     const tokenFp = this.verificationRecordService.generateTokenFingerprint(token);
@@ -184,7 +203,7 @@ export class ConsumeVerificationFlowUsecase {
         now,
         targetConstraint,
       },
-      manager,
+      transactionContext,
     });
 
     if (affected === 0) {

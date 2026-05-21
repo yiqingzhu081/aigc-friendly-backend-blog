@@ -13,9 +13,13 @@ import {
   THIRDPARTY_ERROR,
 } from '@core/common/errors/domain-error';
 import { ThirdPartyAuthService } from '@modules/third-party-auth/third-party-auth.service';
-import { HttpException, Injectable } from '@nestjs/common';
+import { HttpException, Inject, Injectable } from '@nestjs/common';
 import { AccountService } from '@src/modules/account/base/services/account.service';
 import { AccountQueryService } from '@src/modules/account/queries/account.query.service';
+import {
+  TRANSACTION_RUNNER,
+  type TransactionRunner,
+} from '@src/usecases/common/ports/transaction-runner.contract';
 import { PinoLogger } from 'nestjs-pino';
 import {
   ThirdPartyRegisterParams,
@@ -58,6 +62,8 @@ export class WeappRegisterUsecase {
     private readonly accountService: AccountService,
     private readonly accountQueryService: AccountQueryService,
     private readonly logger: PinoLogger,
+    @Inject(TRANSACTION_RUNNER)
+    private readonly transactionRunner: TransactionRunner,
   ) {
     this.logger.setContext(WeappRegisterUsecase.name);
   }
@@ -263,9 +269,9 @@ export class WeappRegisterUsecase {
     };
   }): Promise<UserAccountView> {
     const { accountData, userInfoData } = params;
-    return await this.accountService.runTransaction(async (manager) => {
+    return await this.transactionRunner.run(async (transactionContext) => {
       const account = this.accountService.createAccountEntity({
-        manager,
+        transactionContext,
         accountData: {
           ...accountData,
           loginPassword: 'temp',
@@ -273,16 +279,16 @@ export class WeappRegisterUsecase {
           updatedAt: new Date(),
         },
       });
-      const savedAccount = await this.accountService.saveAccount({ account, manager });
+      const savedAccount = await this.accountService.saveAccount({ account, transactionContext });
 
       savedAccount.loginPassword = AccountService.hashPasswordWithTimestamp(
         accountData.loginPassword,
         savedAccount.createdAt,
       );
-      await this.accountService.saveAccount({ account: savedAccount, manager });
+      await this.accountService.saveAccount({ account: savedAccount, transactionContext });
 
       const userInfo = this.accountService.createUserInfoEntity({
-        manager,
+        transactionContext,
         userInfoData: {
           accountId: savedAccount.id,
           ...userInfoData,
@@ -290,7 +296,7 @@ export class WeappRegisterUsecase {
           updatedAt: new Date(),
         },
       });
-      await this.accountService.saveUserInfo({ userInfo, manager });
+      await this.accountService.saveUserInfo({ userInfo, transactionContext });
 
       return this.accountQueryService.toUserAccountView(savedAccount);
     });

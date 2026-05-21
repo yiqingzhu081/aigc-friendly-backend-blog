@@ -1,15 +1,13 @@
 // src/usecases/account/fetch-user-info.usecase.ts
 
 import { IdentityTypeEnum } from '@app-types/models/account.types';
+import type { PersistenceTransactionContext } from '@app-types/common/transaction.types';
 import { UserInfoView } from '@app-types/models/auth.types'; // 导入统一的 UserInfoView
 import { Gender, UserState } from '@app-types/models/user-info.types';
 import { ACCOUNT_ERROR, DomainError } from '@core/common/errors';
 import { AccountSecurityService } from '@modules/account/base/services/account-security.service';
 import { Injectable } from '@nestjs/common';
-import {
-  AccountService,
-  type AccountTransactionManager,
-} from '@src/modules/account/base/services/account.service';
+import { AccountService } from '@src/modules/account/base/services/account.service';
 
 // 移除本地的 UserInfoView 定义，使用统一的类型定义
 
@@ -65,7 +63,7 @@ export class FetchUserInfoUsecase {
   async executeStrict(params: {
     accountId: number;
     accessGroup?: IdentityTypeEnum[];
-    manager?: AccountTransactionManager;
+    transactionContext?: PersistenceTransactionContext;
   }): Promise<
     UserInfoView & {
       nickname: string;
@@ -78,7 +76,10 @@ export class FetchUserInfoUsecase {
   > {
     const { accountId } = params;
 
-    const base = await this.accountService.findUserInfoByAccountId(accountId, params.manager);
+    const base = await this.accountService.findUserInfoByAccountId(
+      accountId,
+      params.transactionContext,
+    );
     if (!base) {
       throw new DomainError(
         ACCOUNT_ERROR.USER_INFO_NOT_FOUND,

@@ -107,7 +107,7 @@ For boundary contract naming, see docs/common/boundary-contract.rules.md.
 - 密码哈希 / 验证应归属通用密码能力或账号域明确 service，不应散落在 usecase / adapter。
 - `accessGroup` 与 `metaDigest` 的同步必须通过显式写入口表达。
   不得伪装成普通 userInfo patch。
-- `AccountService.runTransaction()` 与类似 service 级事务入口属于 legacy。
+- `AccountService.runTransaction()` 与类似 service 级事务入口已迁移到 usecase-owned `TransactionRunner`。
   新写流程不得在业务 service 上恢复通用事务入口。
 
 ## VerificationRecord 当前稳定边界

@@ -71,7 +71,7 @@ Transaction Root 是写流程中负责开启事务边界的入口。
 - modules(service) 不得提供全局事务入口。
 - modules(service) 不得为了跨聚合或跨 bounded context 写入开启事务。
 - 业务 service 上的 `runTransaction`、`withTransaction`、`transaction` 等方法不得作为新写流程入口。
-- 已存在的 service 级事务入口属于待迁移 legacy，不得新增调用点。
+- 已迁移的 service 级事务入口不得恢复，不得新增调用点。
 - account 行锁若仍需复用，应由 usecase 先开启事务，再显式调用域内锁方法。
   不应继续通过 `runInLockedAccountTransaction()` 之类的包装入口获取事务能力。
 
@@ -80,8 +80,9 @@ Transaction Root 是写流程中负责开启事务边界的入口。
 - account 写 usecase 是 account / userInfo 写流程的事务持有者。
 - registration 主流程由 usecase 持有事务边界。
 - verification 主流程由 usecase 持有事务边界。
-- `AccountService.runTransaction()`、`VerificationRecordService.runTransaction()` 与其他 service 级事务入口是 legacy。
-- P3 迁移前只允许必要维护，不得新增调用点或复制到新 service。
+- `AccountService.runTransaction()`、`VerificationRecordService.runTransaction()` 与其他 service 级事务入口已迁移到
+  `TransactionRunner` 口径。
+- 新写流程不得在业务 service 上恢复通用事务入口。
 
 ## 7. QueryService 的角色
 

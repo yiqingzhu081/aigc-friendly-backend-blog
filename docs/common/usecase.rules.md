@@ -111,8 +111,7 @@ For boundary contract naming, see docs/common/boundary-contract.rules.md.
 - `TransactionRunner` 是目标 usecase-owned transaction boundary contract 命名。
   它不是 core-owned boundary contract，也不是独立 boundary contract layer。
   不新增并行 `TransactionPort` / `UnitOfWork` alias。
-- 当前基于 TypeORM `EntityManager` 的事务 alias 与 service 级事务入口属于待迁移 legacy。
-  不得新增调用点或复制为新模板。
+- 基于 TypeORM `EntityManager` 的事务 alias 与 service 级事务入口已迁移，后续不得恢复。
 - 一旦跨聚合或调用外部系统，Usecase 需先明确一致性策略与补偿策略。
 - `Outbox` 在本仓库当前仅作为架构设计讨论。
 - 尚未形成正式落地实现。

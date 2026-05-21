@@ -22,7 +22,7 @@ Source of truth: This file defines modules(service) supplementary rules; code ex
 - modules(service) 可以接收 usecase 传入的 transaction context。
 - modules(service) 可以基于该事务上下文执行同事务内细粒度写入。
 - modules(service) 不得提供通用 `runTransaction`、`withTransaction` 或等价事务入口。
-- 已存在的 service 级事务入口属于待迁移 legacy，不得新增调用点。
+- 已迁移的 service 级事务入口不得恢复，不得新增调用点。
 - 跨 bounded context 或跨聚合事务必须由 usecase 持有事务边界。
 
 ## Service 职责声明

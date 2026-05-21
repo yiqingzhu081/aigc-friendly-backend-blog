@@ -1,14 +1,18 @@
 // src/usecases/account/create-account.usecase.ts
+import type { PersistenceTransactionContext } from '@app-types/common/transaction.types';
 import { AccountStatus, UserAccountView } from '@app-types/models/account.types';
 import { PasswordPolicyService } from '@core/common/password/password-policy.service';
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   AccountService,
   type AccountCreateData,
-  type AccountTransactionManager,
   type UserInfoCreateData,
 } from '@src/modules/account/base/services/account.service';
 import { AccountQueryService } from '@src/modules/account/queries/account.query.service';
+import {
+  TRANSACTION_RUNNER,
+  type TransactionRunner,
+} from '@src/usecases/common/ports/transaction-runner.contract';
 import { AUTH_ERROR, DomainError } from '../../core/common/errors/domain-error';
 
 /**
@@ -21,6 +25,8 @@ export class CreateAccountUsecase {
     private readonly accountService: AccountService,
     private readonly accountQueryService: AccountQueryService,
     private readonly passwordPolicyService: PasswordPolicyService,
+    @Inject(TRANSACTION_RUNNER)
+    private readonly transactionRunner: TransactionRunner,
   ) {}
 
   /**
@@ -31,27 +37,30 @@ export class CreateAccountUsecase {
   async execute({
     accountData,
     userInfoData,
-    manager,
+    transactionContext,
   }: {
     accountData: AccountCreateData;
     userInfoData: UserInfoCreateData;
-    manager?: AccountTransactionManager;
+    transactionContext?: PersistenceTransactionContext;
   }): Promise<UserAccountView> {
-    const run = async (m: AccountTransactionManager) => this.doCreate(m, accountData, userInfoData);
+    const run = async (activeTransactionContext: PersistenceTransactionContext) =>
+      this.doCreate(activeTransactionContext, accountData, userInfoData);
 
     // 有外部事务则复用；否则自己开
-    return manager ? await run(manager) : await this.accountService.runTransaction(run);
+    return transactionContext
+      ? await run(transactionContext)
+      : await this.transactionRunner.run(run);
   }
 
   /**
    * 实际创建账户的方法
-   * @param manager 实体管理器
+   * @param transactionContext 事务上下文
    * @param accountData 账户数据
    * @param userInfoData 用户信息数据
    * @returns 创建的账户信息
    */
   private async doCreate(
-    manager: AccountTransactionManager,
+    transactionContext: PersistenceTransactionContext,
     accountData: AccountCreateData,
     userInfoData: UserInfoCreateData,
   ): Promise<UserAccountView> {
@@ -70,7 +79,7 @@ export class CreateAccountUsecase {
 
     // 1) 创建账户（先写临时密码拿到 createdAt）
     const account = this.accountService.createAccountEntity({
-      manager,
+      transactionContext,
       accountData: {
         ...accountData,
         loginPassword: 'temp',
@@ -79,7 +88,7 @@ export class CreateAccountUsecase {
         updatedAt: new Date(),
       },
     });
-    const savedAccount = await this.accountService.saveAccount({ account, manager });
+    const savedAccount = await this.accountService.saveAccount({ account, transactionContext });
 
     // 2) 依据 createdAt 生成最终哈希密码并更新
     const hashedPassword = AccountService.hashPasswordWithTimestamp(
@@ -87,11 +96,11 @@ export class CreateAccountUsecase {
       savedAccount.createdAt,
     );
     savedAccount.loginPassword = hashedPassword;
-    await this.accountService.saveAccount({ account: savedAccount, manager });
+    await this.accountService.saveAccount({ account: savedAccount, transactionContext });
 
     // 3) 写入 UserInfo
     const userInfo = this.accountService.createUserInfoEntity({
-      manager,
+      transactionContext,
       userInfoData: {
         ...userInfoData,
         accountId: savedAccount.id,
@@ -99,7 +108,7 @@ export class CreateAccountUsecase {
         updatedAt: new Date(),
       },
     });
-    await this.accountService.saveUserInfo({ userInfo, manager });
+    await this.accountService.saveUserInfo({ userInfo, transactionContext });
 
     return this.accountQueryService.toUserAccountView(savedAccount);
   }

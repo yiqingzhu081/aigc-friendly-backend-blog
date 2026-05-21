@@ -1,7 +1,9 @@
 // src/modules/async-task-record/async-task-record.service.ts
+import type { PersistenceTransactionContext } from '@app-types/common/transaction.types';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, FindOptionsWhere, In, IsNull, QueryFailedError, Repository } from 'typeorm';
+import { getTypeOrmEntityManager } from '@src/infrastructure/database/transaction/typeorm-persistence-transaction-context';
+import { FindOptionsWhere, In, IsNull, QueryFailedError, Repository } from 'typeorm';
 import { AsyncTaskRecordEntity, AsyncTaskRecordStatus } from './async-task-record.entity';
 import {
   AsyncTaskRecordView,
@@ -16,8 +18,6 @@ import {
   UpdateAsyncTaskRecordStatusInput,
 } from './async-task-record.types';
 
-export type AsyncTaskRecordTransactionManager = EntityManager;
-
 @Injectable()
 export class AsyncTaskRecordService {
   constructor(
@@ -27,27 +27,27 @@ export class AsyncTaskRecordService {
 
   async findById(input: {
     readonly id: number;
-    readonly manager?: EntityManager;
+    readonly transactionContext?: PersistenceTransactionContext;
   }): Promise<AsyncTaskRecordView | null> {
-    const repository = this.getRepository(input.manager);
+    const repository = this.getRepository(input.transactionContext);
     const entity = await repository.findOne({ where: { id: input.id } });
     return entity ? this.toView(entity) : null;
   }
 
   async findByQueueJob(input: {
     readonly where: FindAsyncTaskRecordByQueueJobInput;
-    readonly manager?: EntityManager;
+    readonly transactionContext?: PersistenceTransactionContext;
   }): Promise<AsyncTaskRecordView | null> {
-    const repository = this.getRepository(input.manager);
+    const repository = this.getRepository(input.transactionContext);
     const entity = await repository.findOne({ where: input.where });
     return entity ? this.toView(entity) : null;
   }
 
   async listByTraceId(input: {
     readonly where: ListAsyncTaskRecordsByTraceInput;
-    readonly manager?: EntityManager;
+    readonly transactionContext?: PersistenceTransactionContext;
   }): Promise<AsyncTaskRecordView[]> {
-    const repository = this.getRepository(input.manager);
+    const repository = this.getRepository(input.transactionContext);
     const where: FindOptionsWhere<AsyncTaskRecordEntity> = {
       traceId: input.where.traceId,
     };
@@ -67,9 +67,9 @@ export class AsyncTaskRecordService {
 
   async listByBizTarget(input: {
     readonly where: ListAsyncTaskRecordsByBizTargetInput;
-    readonly manager?: EntityManager;
+    readonly transactionContext?: PersistenceTransactionContext;
   }): Promise<AsyncTaskRecordView[]> {
-    const repository = this.getRepository(input.manager);
+    const repository = this.getRepository(input.transactionContext);
     const where: FindOptionsWhere<AsyncTaskRecordEntity> = {
       bizType: input.where.bizType,
       bizKey: input.where.bizKey,
@@ -96,9 +96,9 @@ export class AsyncTaskRecordService {
 
   async countByStatus(input: {
     readonly statuses: ReadonlyArray<AsyncTaskRecordStatus>;
-    readonly manager?: EntityManager;
+    readonly transactionContext?: PersistenceTransactionContext;
   }): Promise<number> {
-    const repository = this.getRepository(input.manager);
+    const repository = this.getRepository(input.transactionContext);
     if (input.statuses.length === 0) {
       return 0;
     }
@@ -107,9 +107,9 @@ export class AsyncTaskRecordService {
 
   async createRecord(input: {
     readonly data: CreateAsyncTaskRecordInput;
-    readonly manager?: EntityManager;
+    readonly transactionContext?: PersistenceTransactionContext;
   }): Promise<AsyncTaskRecordView> {
-    const repository = this.getRepository(input.manager);
+    const repository = this.getRepository(input.transactionContext);
     const entity = repository.create({
       queueName: input.data.queueName,
       jobName: input.data.jobName,
@@ -137,7 +137,7 @@ export class AsyncTaskRecordService {
 
   async createRecordIfAbsent(input: {
     readonly data: CreateAsyncTaskRecordInput;
-    readonly manager?: EntityManager;
+    readonly transactionContext?: PersistenceTransactionContext;
   }): Promise<AsyncTaskRecordView> {
     try {
       return await this.createRecord(input);
@@ -150,7 +150,7 @@ export class AsyncTaskRecordService {
           queueName: input.data.queueName,
           jobId: input.data.jobId,
         },
-        manager: input.manager,
+        transactionContext: input.transactionContext,
       });
       if (existing) {
         return existing;
@@ -161,7 +161,7 @@ export class AsyncTaskRecordService {
 
   async recordEnqueued(input: {
     readonly data: RecordAsyncTaskEnqueuedInput;
-    readonly manager?: EntityManager;
+    readonly transactionContext?: PersistenceTransactionContext;
   }): Promise<AsyncTaskRecordView> {
     const occurredAt = input.data.occurredAt ?? input.data.enqueuedAt ?? new Date();
     const enqueuedAt = input.data.enqueuedAt ?? occurredAt;
@@ -185,13 +185,13 @@ export class AsyncTaskRecordService {
         maxAttempts: input.data.maxAttempts,
         enqueuedAt,
       },
-      manager: input.manager,
+      transactionContext: input.transactionContext,
     });
   }
 
   async recordEnqueueFailed(input: {
     readonly data: RecordAsyncTaskEnqueueFailedInput;
-    readonly manager?: EntityManager;
+    readonly transactionContext?: PersistenceTransactionContext;
   }): Promise<AsyncTaskRecordView> {
     const occurredAt = input.data.occurredAt ?? new Date();
     const normalizedInputJobId = this.normalizeProvidedJobId(input.data.jobId);
@@ -223,7 +223,7 @@ export class AsyncTaskRecordService {
     try {
       return await this.createRecord({
         data: buildCreateData(resolvedJobId),
-        manager: input.manager,
+        transactionContext: input.transactionContext,
       });
     } catch (error: unknown) {
       if (!this.isUniqueConstraintViolation(error)) {
@@ -239,20 +239,20 @@ export class AsyncTaskRecordService {
       });
       return await this.createRecord({
         data: buildCreateData(fallbackJobId),
-        manager: input.manager,
+        transactionContext: input.transactionContext,
       });
     }
   }
 
   async recordStarted(input: {
     readonly data: RecordAsyncTaskStartedInput;
-    readonly manager?: EntityManager;
+    readonly transactionContext?: PersistenceTransactionContext;
   }): Promise<AsyncTaskRecordView> {
     const startedAt = input.data.startedAt ?? new Date();
     const occurredAt = input.data.occurredAt ?? startedAt;
     const existing = await this.findByQueueJob({
       where: { queueName: input.data.queueName, jobId: input.data.jobId },
-      manager: input.manager,
+      transactionContext: input.transactionContext,
     });
     const attemptCount = input.data.attemptCount ?? Math.max((existing?.attemptCount ?? 0) + 1, 1);
 
@@ -266,7 +266,7 @@ export class AsyncTaskRecordService {
           attemptCount,
           reason: input.data.reason,
         },
-        manager: input.manager,
+        transactionContext: input.transactionContext,
       });
       if (updated) {
         return updated;
@@ -294,19 +294,19 @@ export class AsyncTaskRecordService {
         enqueuedAt: input.data.enqueuedAt ?? startedAt,
         startedAt,
       },
-      manager: input.manager,
+      transactionContext: input.transactionContext,
     });
   }
 
   async recordFinished(input: {
     readonly data: RecordAsyncTaskFinishedInput;
-    readonly manager?: EntityManager;
+    readonly transactionContext?: PersistenceTransactionContext;
   }): Promise<AsyncTaskRecordView> {
     const finishedAt = input.data.finishedAt ?? new Date();
     const occurredAt = input.data.occurredAt ?? finishedAt;
     const existing = await this.findByQueueJob({
       where: { queueName: input.data.queueName, jobId: input.data.jobId },
-      manager: input.manager,
+      transactionContext: input.transactionContext,
     });
     const attemptCount = input.data.attemptCount ?? existing?.attemptCount ?? 1;
 
@@ -320,7 +320,7 @@ export class AsyncTaskRecordService {
           attemptCount,
           reason: input.data.reason,
         },
-        manager: input.manager,
+        transactionContext: input.transactionContext,
       });
       if (updated) {
         return updated;
@@ -349,16 +349,16 @@ export class AsyncTaskRecordService {
         startedAt: input.data.startedAt ?? null,
         finishedAt,
       },
-      manager: input.manager,
+      transactionContext: input.transactionContext,
     });
   }
 
   async updateStatusByQueueJob(input: {
     readonly where: FindAsyncTaskRecordByQueueJobInput;
     readonly patch: UpdateAsyncTaskRecordStatusInput;
-    readonly manager?: EntityManager;
+    readonly transactionContext?: PersistenceTransactionContext;
   }): Promise<AsyncTaskRecordView | null> {
-    const repository = this.getRepository(input.manager);
+    const repository = this.getRepository(input.transactionContext);
     const entity = await repository.findOne({ where: input.where });
     if (!entity) {
       return null;
@@ -385,11 +385,10 @@ export class AsyncTaskRecordService {
     return this.toView(saved);
   }
 
-  async runTransaction<T>(callback: (manager: EntityManager) => Promise<T>): Promise<T> {
-    return await this.asyncTaskRecordRepository.manager.transaction(callback);
-  }
-
-  getRepository(manager?: EntityManager): Repository<AsyncTaskRecordEntity> {
+  private getRepository(
+    transactionContext?: PersistenceTransactionContext,
+  ): Repository<AsyncTaskRecordEntity> {
+    const manager = transactionContext ? getTypeOrmEntityManager(transactionContext) : undefined;
     return manager ? manager.getRepository(AsyncTaskRecordEntity) : this.asyncTaskRecordRepository;
   }
 

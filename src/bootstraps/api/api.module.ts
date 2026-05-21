@@ -2,6 +2,7 @@
 import { GraphQLAdapterModule } from '@src/adapters/api/graphql/graphql-adapter.module';
 import { AppConfigModule } from '@src/infrastructure/config/config.module';
 import { DatabaseModule } from '@src/infrastructure/database/database.module';
+import { TypeOrmTransactionModule } from '@src/infrastructure/database/transaction/typeorm-transaction.module';
 import { FieldEncryptionModule } from '@src/infrastructure/field-encryption/field-encryption.module';
 import { GqlAllExceptionsFilter } from '@src/infrastructure/graphql/filters/graphql-exception.filter';
 import { AppGraphQLModule } from '@src/infrastructure/graphql/graphql.module';
@@ -21,6 +22,7 @@ import { ApiService } from './api.service';
     LoggerModule,
     MiddlewareModule,
     DatabaseModule,
+    TypeOrmTransactionModule,
     AppGraphQLModule,
     GraphQLAdapterModule,
     FieldEncryptionModule,

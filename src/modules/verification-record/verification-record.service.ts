@@ -7,14 +7,14 @@ import {
   VerificationRecordStatus,
   VerificationRecordType,
 } from '@app-types/models/verification-record.types';
+import type { PersistenceTransactionContext } from '@app-types/common/transaction.types';
 import { DomainError, VERIFICATION_RECORD_ERROR } from '@core/common/errors/domain-error';
 import { TokenFingerprintHelper } from '@modules/common/security/token-fingerprint.helper';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, QueryFailedError, Repository } from 'typeorm';
+import { getTypeOrmEntityManager } from '@src/infrastructure/database/transaction/typeorm-persistence-transaction-context';
+import { QueryFailedError, Repository } from 'typeorm';
 import { VerificationRecordEntity } from './verification-record.entity';
-
-export type VerificationRecordTransactionManager = EntityManager;
 
 export type VerificationRecordConsumeTargetConstraint =
   | { mode: 'IGNORE' }
@@ -244,16 +244,14 @@ export class VerificationRecordService {
    * 业务逻辑（如 token 生成、重复检查等）应在 Usecase 中处理
    *
    * @param params 创建参数
-   * @param manager 可选的事务管理器
+   * @param transactionContext 可选的事务上下文
    * @returns 创建的验证记录实体
    */
   async createRecord(
     params: CreateVerificationRecordParams,
-    manager?: EntityManager,
+    transactionContext?: PersistenceTransactionContext,
   ): Promise<VerificationRecordEntity> {
-    const repository = manager
-      ? manager.getRepository(VerificationRecordEntity)
-      : this.verificationRecordRepository;
+    const repository = this.getRepository(transactionContext);
 
     try {
       // 生成 token 指纹
@@ -306,18 +304,16 @@ export class VerificationRecordService {
    * @param recordId 记录 ID
    * @param status 新状态
    * @param consumedByAccountId 消费者账号 ID（仅在消费时需要）
-   * @param manager 可选的事务管理器
+   * @param transactionContext 可选的事务上下文
    * @returns 更新后的验证记录实体
    */
   async updateRecordStatus(
     recordId: number,
     status: VerificationRecordStatus,
     consumedByAccountId?: number,
-    manager?: EntityManager,
+    transactionContext?: PersistenceTransactionContext,
   ): Promise<VerificationRecordEntity> {
-    const repository = manager
-      ? manager.getRepository(VerificationRecordEntity)
-      : this.verificationRecordRepository;
+    const repository = this.getRepository(transactionContext);
 
     try {
       const record = await repository.findOne({ where: { id: recordId } });
@@ -408,16 +404,14 @@ export class VerificationRecordService {
       now: Date;
       targetConstraint: VerificationRecordConsumeTargetConstraint;
     };
-    manager?: EntityManager;
+    transactionContext?: PersistenceTransactionContext;
   }): Promise<{
     affected: number;
     updatedRecord: VerificationRecordEntity | null;
     validationRecord: VerificationRecordValidationSnapshot | null;
   }> {
-    const { where, context, manager } = params;
-    const repository = manager
-      ? manager.getRepository(VerificationRecordEntity)
-      : this.verificationRecordRepository;
+    const { where, context, transactionContext } = params;
+    const repository = this.getRepository(transactionContext);
     const { consumedByAccountId, expectedType, subjectType, subjectId, now, targetConstraint } =
       context;
 
@@ -493,15 +487,16 @@ export class VerificationRecordService {
     };
   }
 
-  async revokeRecord(params: { recordId: number; manager?: EntityManager }): Promise<{
+  async revokeRecord(params: {
+    recordId: number;
+    transactionContext?: PersistenceTransactionContext;
+  }): Promise<{
     affected: number;
     updatedRecord: VerificationRecordEntity | null;
     currentRecord: VerificationRecordEntity | null;
   }> {
-    const { recordId, manager } = params;
-    const repository = manager
-      ? manager.getRepository(VerificationRecordEntity)
-      : this.verificationRecordRepository;
+    const { recordId, transactionContext } = params;
+    const repository = this.getRepository(transactionContext);
 
     const result = await repository
       .createQueryBuilder()
@@ -530,12 +525,10 @@ export class VerificationRecordService {
 
   async getTargetAccountIdByRecordId(params: {
     recordId: number;
-    manager?: EntityManager;
+    transactionContext?: PersistenceTransactionContext;
   }): Promise<number | null> {
-    const { recordId, manager } = params;
-    const repository = manager
-      ? manager.getRepository(VerificationRecordEntity)
-      : this.verificationRecordRepository;
+    const { recordId, transactionContext } = params;
+    const repository = this.getRepository(transactionContext);
     const record = await repository.findOne({
       where: { id: recordId },
       select: ['id', 'targetAccountId'],
@@ -575,20 +568,14 @@ export class VerificationRecordService {
   }
 
   /**
-   * 运行事务
-   * @param callback 事务回调函数
-   * @returns 事务执行结果
-   */
-  async runTransaction<T>(callback: (manager: EntityManager) => Promise<T>): Promise<T> {
-    return await this.verificationRecordRepository.manager.transaction(callback);
-  }
-
-  /**
-   * 获取 Repository 实例（用于高级查询）
-   * @param manager 可选的事务管理器
+   * 获取内部 Repository 实例（用于高级查询）
+   * @param transactionContext 可选的事务上下文
    * @returns Repository 实例
    */
-  getRepository(manager?: EntityManager): Repository<VerificationRecordEntity> {
+  private getRepository(
+    transactionContext?: PersistenceTransactionContext,
+  ): Repository<VerificationRecordEntity> {
+    const manager = transactionContext ? getTypeOrmEntityManager(transactionContext) : undefined;
     return manager
       ? manager.getRepository(VerificationRecordEntity)
       : this.verificationRecordRepository;

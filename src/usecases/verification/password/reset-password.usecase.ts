@@ -1,10 +1,8 @@
 // src/usecases/verification/password/reset-password.usecase.ts
 
+import type { PersistenceTransactionContext } from '@app-types/common/transaction.types';
 import { Injectable } from '@nestjs/common';
-import {
-  AccountService,
-  type AccountTransactionManager,
-} from '@src/modules/account/base/services/account.service';
+import { AccountService } from '@src/modules/account/base/services/account.service';
 import {
   ACCOUNT_ERROR,
   DomainError,
@@ -22,8 +20,8 @@ export interface ResetPasswordUsecaseParams {
   targetAccountId: number;
   /** 新密码 */
   newPassword: string;
-  /** 可选的事务管理器 */
-  manager?: AccountTransactionManager;
+  /** 可选的事务上下文 */
+  transactionContext?: PersistenceTransactionContext;
 }
 
 /**
@@ -54,7 +52,7 @@ export class ResetPasswordUsecase {
    * @returns 重置结果
    */
   async execute(params: ResetPasswordUsecaseParams): Promise<ResetPasswordUsecaseResult> {
-    const { recordId, targetAccountId, newPassword, manager } = params;
+    const { recordId, targetAccountId, newPassword, transactionContext } = params;
 
     try {
       // 验证新密码是否符合安全策略
@@ -78,14 +76,14 @@ export class ResetPasswordUsecase {
         account.createdAt,
       );
 
-      // 更新账户密码，使用传入的 manager（如果有）
+      // 更新账户密码，使用传入的事务上下文（如果有）
       await this.accountService.updateAccount(
         targetAccountId,
         {
           loginPassword: hashedPassword,
           updatedAt: new Date(),
         },
-        manager,
+        transactionContext,
       );
 
       return {

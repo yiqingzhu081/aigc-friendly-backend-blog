@@ -96,12 +96,11 @@
 
 - 旧项目缺少新项目中的 `aggregate.rules.md` 与 `entity.rules.md`。
 - 旧项目 `docs/README.md` 路由比新项目少 aggregate/entity/current API 分支，需要按旧项目业务面改写。
-- 旧项目 `AGENTS.md` 已吸收部分新项目口径，但 transaction boundary 描述仍需与新项目当前 `TransactionRunner`
-  口径核对。
+- 旧项目 `AGENTS.md` 已吸收新项目 `TransactionRunner` transaction boundary 口径。
 - 旧项目 `docs/api/*-current.md` 只保留通用 API current contract 时才应补齐；不能复制教育 API current 文档。
 - 旧项目 ESLint architecture coverage 需要重新核对：哪些边界已自动覆盖，哪些仍需 `rg`/人工检查。
-- 旧项目代码可能仍存在旧式 EntityManager transaction alias、adapter 直接依赖、DTO/type 下沉、modules 跨域依赖等
-  历史问题，需要在规则对齐后分批清理。
+- 旧项目代码历史问题需要在规则对齐后分批清理；P3b 第八批已清空旧式 EntityManager transaction alias
+  与 service 级事务入口，其他尾项按 inventory 继续收口。
 
 ## 推进阶段
 
@@ -146,8 +145,9 @@
 
 P0 决策闸口：
 
-- D0：旧项目采用新项目 `TransactionRunner` 口径作为目标；若当前代码仍使用 EntityManager transaction alias，
-  只能作为待迁移项记录，不能继续新增同类 alias。
+- D0：旧项目采用新项目 `TransactionRunner` 口径作为目标；P0 阶段若代码仍使用 EntityManager transaction alias，
+  只能作为迁移项记录，不能继续新增同类 alias。
+  - P3b 第八批后，EntityManager transaction alias 已清空。
 - D1：旧项目只补通用 current API 文档。教育、班级、教务、upstream-access 等 current API 文档一律排除。
 - D2：先补齐 aggregate/entity rule 文档与人工扫描命令；是否新增 lint 规则由 P2 根据当前 ESLint 能力决策。
 - D3：账号收口计划保留为完成计划，不再作为当前主线；当前主线是本分层治理对齐计划。
@@ -157,7 +157,7 @@ P0 决策闸口：
 当前产出：
 
 - `AGENTS.md` 已补 current API 路由，并将事务目标口径收敛到 `TransactionRunner`，当前
-  EntityManager alias 仅作为 legacy 迁移债务。
+  EntityManager alias 已在 P3b 第八批清空。
 - `docs/README.md` 已补 aggregate/entity/plans/current API/frontend/deprecated 路由。
 - `plans/README.md` 已补生命周期、token 友好读取顺序与当前主计划入口。
 - 已新增 `docs/common/aggregate.rules.md` 与 `docs/common/entity.rules.md`。
@@ -303,8 +303,7 @@ P0 决策闸口：
   - `src/modules/account/queries/account.query.service.ts` 从依赖混合读写 `AccountService`
     和 `AccountTransactionManager` 改为同域 repository 读侧实现。
   - 行为保持原有账户详情权限判断、账户 view 映射、userInfo 严格读取与可见资料裁剪。
-  - account 写 service 的 transaction legacy 未在本批次扩大处理，仍留给 transaction boundary
-    专项批次。
+  - account 写 service 的 transaction legacy 已在 P3b 第八批由 transaction boundary 专项收口。
 - 第四批已完成：
   - `ThirdPartyAuthEntity` 从 `src/modules/account/base/entities` 迁回
     `src/modules/third-party-auth`。
@@ -326,6 +325,14 @@ P0 决策闸口：
   - `AuthModule` 不再导入 `AccountInstallerModule`，只保留 auth 模块自身 provider。
   - 删除空壳 `RegisterModule`，注册依赖由 `RegistrationUsecasesModule` 显式装配。
   - `VerificationRecordModule` 移除未使用的 account/password module imports。
+- 第八批已完成：
+  - 引入与新项目一致的 `TransactionRunner` / `PersistenceTransactionContext` 口径。
+  - API / Worker bootstrap 注册 TypeORM transaction runner。
+  - registration / account / verification usecases 改为持有事务入口。
+  - account / verification-record / async-task-record / ai-provider-call-record modules 对外只接收
+    transaction context，内部按需解包 TypeORM manager。
+  - 移除 `AccountTransactionManager`、`VerificationRecordTransactionManager`、
+    `AsyncTaskRecordTransactionManager` 与 service 级 `runTransaction()`。
 
 验证：
 
@@ -336,8 +343,11 @@ P0 决策闸口：
 - third-party-auth entity 搜索仅命中 `src/modules/third-party-auth/**` 与测试引用。
 - boundary port 扫描不再命中 core legacy `.ports.ts` 文件或 imports。
 - business modules 跨域扫描排除 `.spec.ts` 后只剩 business -> `modules/common` 的允许依赖。
+- transaction alias / service `runTransaction` 扫描不再命中生产代码。
 - `npm run typecheck` 通过。
 - `npx eslint "{src,apps,libs,test}/**/*.ts" --cache --cache-location .eslintcache` 通过。
+- `npx jest src/infrastructure/database/transaction/typeorm-persistence-transaction-context.spec.ts --runInBand`
+  通过。
 - `npm run test:e2e:file -- 01-auth/auth.e2e-spec.ts` 通过。
 - `npm run test:e2e:file -- 07-pagination-sort-search/pagination.e2e-spec.ts` 通过。
 - `npm run migration:drill:empty-db` 已尝试；当前 E2E DB 用户缺少 `CREATE/DROP DATABASE`
@@ -379,8 +389,8 @@ P0 决策闸口：
 
 ## 已冻结决策
 
-- D0：旧项目采用新项目 `TransactionRunner` 口径作为目标；当前 EntityManager transaction alias 只作为待迁移项，
-  不再新增。
+- D0：旧项目采用新项目 `TransactionRunner` 口径；EntityManager transaction alias 已迁移完成，
+  后续不得恢复。
 - D1：旧项目只补通用 current API 文档；教育业务 current API 文档排除。
 - D2：先补齐 aggregate/entity rule 文档与人工扫描命令；是否新增 lint 规则放到 P2 决策。
 - D3：账号收口计划保留为完成计划，当前主线切换为本分层治理对齐计划。

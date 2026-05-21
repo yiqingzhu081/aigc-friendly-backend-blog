@@ -1,6 +1,7 @@
 // src/modules/verification-record/services/verification-read.service.ts
 
 import { AudienceTypeEnum } from '@app-types/models/account.types';
+import type { PersistenceTransactionContext } from '@app-types/common/transaction.types';
 import {
   SubjectType,
   VerificationRecordStatus,
@@ -46,12 +47,13 @@ export class VerificationReadService {
     audience?: AudienceTypeEnum | null,
     email?: string | null,
     phone?: string | null,
+    transactionContext?: PersistenceTransactionContext,
   ): Promise<VerificationRecordView> {
     // 生成 token 指纹（不掺入 audience）
     const tokenFp = TokenFingerprintHelper.generateTokenFingerprint({ token });
 
     // 查找活跃记录
-    const record = await this.readRepository.findActiveByTokenFp(tokenFp);
+    const record = await this.readRepository.findActiveByTokenFp(tokenFp, transactionContext);
     if (!record) {
       throw new DomainError(VERIFICATION_RECORD_ERROR.RECORD_NOT_FOUND, '验证记录不存在或已失效');
     }

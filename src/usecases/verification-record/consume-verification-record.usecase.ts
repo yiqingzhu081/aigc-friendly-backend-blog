@@ -1,5 +1,6 @@
 // src/usecases/verification-record/consume-verification-record.usecase.ts
 
+import type { PersistenceTransactionContext } from '@app-types/common/transaction.types';
 import {
   SubjectType,
   VerificationRecordStatus,
@@ -10,7 +11,7 @@ import {
   PERMISSION_ERROR,
   VERIFICATION_RECORD_ERROR,
 } from '@core/common/errors/domain-error';
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   VerificationRecordDetailView,
   VerificationRecordQueryService,
@@ -19,9 +20,12 @@ import {
 import {
   VerificationRecordService,
   type VerificationRecordConsumeTargetConstraint,
-  type VerificationRecordTransactionManager,
   type VerificationRecordValidationSnapshot,
 } from '@src/modules/verification-record/verification-record.service';
+import {
+  TRANSACTION_RUNNER,
+  type TransactionRunner,
+} from '@src/usecases/common/ports/transaction-runner.contract';
 
 /**
  * 通过 token 消费验证记录用例参数
@@ -37,8 +41,8 @@ export interface ConsumeByTokenUsecaseParams {
   subjectType?: SubjectType;
   /** 主体 ID（可选，用于记录消费后的主体信息） */
   subjectId?: number;
-  /** 可选的事务管理器 */
-  manager?: VerificationRecordTransactionManager;
+  /** 可选的事务上下文 */
+  transactionContext?: PersistenceTransactionContext;
 }
 
 /**
@@ -55,8 +59,8 @@ export interface ConsumeByIdUsecaseParams {
   subjectType?: SubjectType;
   /** 主体 ID（可选，用于记录消费后的主体信息） */
   subjectId?: number;
-  /** 可选的事务管理器 */
-  manager?: VerificationRecordTransactionManager;
+  /** 可选的事务上下文 */
+  transactionContext?: PersistenceTransactionContext;
 }
 
 /**
@@ -65,8 +69,8 @@ export interface ConsumeByIdUsecaseParams {
 export interface RevokeRecordUsecaseParams {
   /** 记录 ID */
   recordId: number;
-  /** 可选的事务管理器 */
-  manager?: VerificationRecordTransactionManager;
+  /** 可选的事务上下文 */
+  transactionContext?: PersistenceTransactionContext;
 }
 
 /**
@@ -168,6 +172,8 @@ export class ConsumeVerificationRecordUsecase {
   constructor(
     private readonly verificationRecordService: VerificationRecordService,
     private readonly verificationRecordQueryService: VerificationRecordQueryService,
+    @Inject(TRANSACTION_RUNNER)
+    private readonly transactionRunner: TransactionRunner,
   ) {}
 
   /**
@@ -176,7 +182,8 @@ export class ConsumeVerificationRecordUsecase {
    * @returns 更新后的验证记录实体
    */
   async consumeByToken(params: ConsumeByTokenUsecaseParams): Promise<VerificationRecordView> {
-    const { token, consumedByAccountId, expectedType, subjectType, subjectId, manager } = params;
+    const { token, consumedByAccountId, expectedType, subjectType, subjectId, transactionContext } =
+      params;
     const tokenFp = this.verificationRecordService.generateTokenFingerprint(token);
 
     return this.executeConsumption({
@@ -185,7 +192,7 @@ export class ConsumeVerificationRecordUsecase {
       notFoundMessage: '无效的验证 token',
       context: { consumedByAccountId, expectedType, subjectType, subjectId, now: new Date() },
       errorDetails: { consumedByAccountId, expectedType },
-      manager,
+      transactionContext,
     });
   }
 
@@ -195,7 +202,14 @@ export class ConsumeVerificationRecordUsecase {
    * @returns 更新后的验证记录实体
    */
   async consumeById(params: ConsumeByIdUsecaseParams): Promise<VerificationRecordView> {
-    const { recordId, consumedByAccountId, expectedType, subjectType, subjectId, manager } = params;
+    const {
+      recordId,
+      consumedByAccountId,
+      expectedType,
+      subjectType,
+      subjectId,
+      transactionContext,
+    } = params;
 
     return this.executeConsumption({
       where: { id: recordId },
@@ -203,7 +217,7 @@ export class ConsumeVerificationRecordUsecase {
       notFoundMessage: '验证记录不存在或已失效',
       context: { consumedByAccountId, expectedType, subjectType, subjectId, now: new Date() },
       errorDetails: { recordId, consumedByAccountId, expectedType },
-      manager,
+      transactionContext,
     });
   }
 
@@ -219,8 +233,13 @@ export class ConsumeVerificationRecordUsecase {
     consumedByAccountId?: number,
     expectedType?: VerificationRecordType,
   ): Promise<VerificationRecordView> {
-    return this.verificationRecordService.runTransaction(async (manager) => {
-      return this.consumeByToken({ token, consumedByAccountId, expectedType, manager });
+    return this.transactionRunner.run(async (transactionContext) => {
+      return this.consumeByToken({
+        token,
+        consumedByAccountId,
+        expectedType,
+        transactionContext,
+      });
     });
   }
 
@@ -234,8 +253,8 @@ export class ConsumeVerificationRecordUsecase {
     recordId: number,
     consumedByAccountId?: number,
   ): Promise<VerificationRecordView> {
-    return this.verificationRecordService.runTransaction(async (manager) => {
-      return this.consumeById({ recordId, consumedByAccountId, manager });
+    return this.transactionRunner.run(async (transactionContext) => {
+      return this.consumeById({ recordId, consumedByAccountId, transactionContext });
     });
   }
 
@@ -245,16 +264,16 @@ export class ConsumeVerificationRecordUsecase {
    * @returns 更新后的验证记录实体
    */
   async revokeRecord(params: RevokeRecordUsecaseParams): Promise<VerificationRecordDetailView> {
-    const { recordId, manager } = params;
+    const { recordId, transactionContext } = params;
 
-    return this.verificationRecordService.runTransaction(async (transactionManager) => {
-      const activeManager = manager || transactionManager;
-
+    const run = async (
+      activeTransactionContext: PersistenceTransactionContext,
+    ): Promise<VerificationRecordDetailView> => {
       try {
         const { affected, updatedRecord, currentRecord } =
           await this.verificationRecordService.revokeRecord({
             recordId,
-            manager: activeManager,
+            transactionContext: activeTransactionContext,
           });
 
         if (affected === 0) {
@@ -285,7 +304,11 @@ export class ConsumeVerificationRecordUsecase {
           error,
         );
       }
-    });
+    };
+
+    return transactionContext
+      ? await run(transactionContext)
+      : await this.transactionRunner.run(run);
   }
 
   /**
@@ -306,9 +329,10 @@ export class ConsumeVerificationRecordUsecase {
     notFoundMessage: string;
     context: ValidationContext;
     errorDetails: Record<string, unknown>;
-    manager?: VerificationRecordTransactionManager;
+    transactionContext?: PersistenceTransactionContext;
   }): Promise<VerificationRecordView> {
-    const { where, notFoundError, notFoundMessage, context, errorDetails, manager } = options;
+    const { where, notFoundError, notFoundMessage, context, errorDetails, transactionContext } =
+      options;
 
     try {
       const targetConstraint = this.resolveTargetConstraint(context);
@@ -316,7 +340,7 @@ export class ConsumeVerificationRecordUsecase {
         await this.verificationRecordService.consumeRecord({
           where,
           context: { ...context, targetConstraint },
-          manager,
+          transactionContext,
         });
 
       if (affected === 0) {

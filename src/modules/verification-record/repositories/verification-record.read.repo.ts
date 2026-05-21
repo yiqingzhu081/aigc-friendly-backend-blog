@@ -1,11 +1,13 @@
 // src/modules/verification-record/repositories/verification-record.read.repo.ts
 
 import { AudienceTypeEnum } from '@app-types/models/account.types';
+import type { PersistenceTransactionContext } from '@app-types/common/transaction.types';
 import { VerificationRecordStatus } from '@app-types/models/verification-record.types';
 import { DomainError, VERIFICATION_RECORD_ERROR } from '@core/common/errors/domain-error';
 import { normalizeEmail, normalizePhone } from '@core/common/normalize/normalize.helper';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { getTypeOrmEntityManager } from '@src/infrastructure/database/transaction/typeorm-persistence-transaction-context';
 import { Repository } from 'typeorm';
 import { VerificationRecordEntity } from '../verification-record.entity';
 
@@ -29,11 +31,19 @@ export class VerificationRecordReadRepository {
    * 根据 token 指纹查找活跃的验证记录
    *
    * @param tokenFp token 指纹（Buffer 格式）
+   * @param transactionContext 可选的事务上下文
    * @returns 活跃的验证记录或 null
    */
-  async findActiveByTokenFp(tokenFp: Buffer): Promise<VerificationRecordEntity | null> {
+  async findActiveByTokenFp(
+    tokenFp: Buffer,
+    transactionContext?: PersistenceTransactionContext,
+  ): Promise<VerificationRecordEntity | null> {
     try {
-      return await this.repository.findOne({
+      const manager = transactionContext ? getTypeOrmEntityManager(transactionContext) : undefined;
+      const repository = manager
+        ? manager.getRepository(VerificationRecordEntity)
+        : this.repository;
+      return await repository.findOne({
         where: {
           tokenFp,
           status: VerificationRecordStatus.ACTIVE,

@@ -1,5 +1,6 @@
 // 文件位置: /var/www/backend/src/modules/verification-record/queries/consumable.query.service.ts
 import { AudienceTypeEnum } from '@app-types/models/account.types';
+import type { PersistenceTransactionContext } from '@app-types/common/transaction.types';
 import { Injectable } from '@nestjs/common';
 import {
   VerificationReadService,
@@ -22,7 +23,14 @@ export class ConsumableQueryService {
     audience?: AudienceTypeEnum | null,
     email?: string | null,
     phone?: string | null,
+    transactionContext?: PersistenceTransactionContext,
   ): Promise<VerificationRecordView> {
-    return this.verificationReadService.findConsumableRecord(token, audience, email, phone);
+    return this.verificationReadService.findConsumableRecord(
+      token,
+      audience,
+      email,
+      phone,
+      transactionContext,
+    );
   }
 }

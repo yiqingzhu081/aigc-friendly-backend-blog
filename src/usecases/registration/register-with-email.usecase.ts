@@ -4,9 +4,13 @@ import { AccountStatus, IdentityTypeEnum, UserAccountView } from '@app-types/mod
 import { ACCOUNT_ERROR, AUTH_ERROR, DomainError } from '@core/common/errors';
 import { isPrivateIp, isServerIp } from '@core/common/network/network-access.helper';
 import { PasswordPolicyService } from '@core/common/password/password-policy.service';
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { AccountService } from '@src/modules/account/base/services/account.service';
 import { AccountQueryService } from '@src/modules/account/queries/account.query.service';
+import {
+  TRANSACTION_RUNNER,
+  type TransactionRunner,
+} from '@src/usecases/common/ports/transaction-runner.contract';
 import {
   RegisterWithEmailParams,
   RegisterWithEmailResult,
@@ -29,6 +33,8 @@ export class RegisterWithEmailUsecase {
     private readonly accountQueryService: AccountQueryService,
     private readonly passwordPolicyService: PasswordPolicyService,
     private readonly logger: PinoLogger,
+    @Inject(TRANSACTION_RUNNER)
+    private readonly transactionRunner: TransactionRunner,
   ) {
     this.logger.setContext(RegisterWithEmailUsecase.name);
   }
@@ -215,7 +221,7 @@ export class RegisterWithEmailUsecase {
       metaDigest,
     } = preparedData;
 
-    return await this.accountService.runTransaction(async (manager) => {
+    return await this.transactionRunner.run(async (transactionContext) => {
       const passwordValidation = this.passwordPolicyService.validatePassword(loginPassword);
       if (!passwordValidation.isValid) {
         throw new DomainError(
@@ -225,7 +231,7 @@ export class RegisterWithEmailUsecase {
       }
 
       const account = this.accountService.createAccountEntity({
-        manager,
+        transactionContext,
         accountData: {
           loginName,
           loginEmail,
@@ -236,16 +242,16 @@ export class RegisterWithEmailUsecase {
           updatedAt: new Date(),
         },
       });
-      const savedAccount = await this.accountService.saveAccount({ account, manager });
+      const savedAccount = await this.accountService.saveAccount({ account, transactionContext });
 
       savedAccount.loginPassword = AccountService.hashPasswordWithTimestamp(
         loginPassword,
         savedAccount.createdAt,
       );
-      await this.accountService.saveAccount({ account: savedAccount, manager });
+      await this.accountService.saveAccount({ account: savedAccount, transactionContext });
 
       const userInfo = this.accountService.createUserInfoEntity({
-        manager,
+        transactionContext,
         userInfoData: {
           accountId: savedAccount.id,
           nickname,
@@ -256,7 +262,7 @@ export class RegisterWithEmailUsecase {
           updatedAt: new Date(),
         },
       });
-      await this.accountService.saveUserInfo({ userInfo, manager });
+      await this.accountService.saveUserInfo({ userInfo, transactionContext });
 
       return this.accountQueryService.toUserAccountView(savedAccount);
     });

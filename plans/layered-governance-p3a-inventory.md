@@ -56,13 +56,15 @@ P3b 已处理：
 
 ### 1. Transaction boundary 仍由 modules(service) 持有
 
+状态：P3b 第八批已修复。
+
 规则：
 
 - `docs/common/usecase-write-flow-boundaries.rules.md`
 - `docs/common/modules.rules.md`
 - `docs/common/boundary-contract.rules.md`
 
-现状：
+原现状：
 
 - `src/modules/account/base/services/account.service.ts`
   - `AccountTransactionManager = EntityManager`
@@ -85,13 +87,15 @@ P3b 已处理：
 - `src/usecases/verification/password/reset-password.usecase.ts`
 - `src/usecases/verification/types/consume.types.ts`
 
-建议修复：
+已执行修复：
 
-- 引入目标 `TransactionRunner` / transaction context 口径。
-- usecase 持有事务入口。
-- modules(service) 只接收 transaction context。
+- 引入与新项目一致的 `TransactionRunner` / `PersistenceTransactionContext` 口径。
+- API / Worker bootstrap 注册 TypeORM transaction runner。
+- registration / account / verification usecases 改为持有事务入口。
+- account / verification-record / async-task-record / ai-provider-call-record modules 对外只接收
+  transaction context，内部按需解包 TypeORM manager。
 - 移除给上层使用的 `*TransactionManager = EntityManager` alias。
-- 先处理 account / verification，再处理 async-task-record。
+- 删除 module service 级 `runTransaction()` 入口。
 
 ### 2. Business modules 存在跨域依赖
 

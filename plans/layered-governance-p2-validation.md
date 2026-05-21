@@ -12,10 +12,11 @@ P2 已完成，日期：2026-05-21。
 ## P2 决策
 
 - 参考新项目 `localArchitecturePlugin`，旧项目已迁入可安全落地的 local architecture ESLint 规则。
-- 已知 legacy 做精确白名单，保证 P2 不把 P3 迁移债务提前变成阻塞：
+- P2 阶段曾对已知 legacy 做精确白名单，保证 P2 不把 P3 迁移债务提前变成阻塞：
   - `AccountTransactionManager`
   - `VerificationRecordTransactionManager`
   - `AsyncTaskRecordTransactionManager`
+- P3b 第八批已清空上述 transaction alias 与 service 级事务入口；后续不得恢复。
 - `no-cross-domain-modules-imports` 暂不迁入 ESLint error。
   旧项目当前存在真实跨模块依赖，需要 P3a 先盘点，再分批修。
 - 新项目更细的 `modules-contracts` / `modules-types` / `modules-internal` boundaries modeling
@@ -72,18 +73,13 @@ P3b 已处理：
   - `src/core/sort/sort.contract.ts`
 - `local-architecture/no-boundary-port-naming-drift` 已移除 legacy core ports 白名单。
 
-剩余结果：
+P3b 第八批后结果：
 
-- legacy transaction alias：
-  - `AccountTransactionManager`
-  - `VerificationRecordTransactionManager`
-  - `AsyncTaskRecordTransactionManager`
-
-处理：
-
-- 当前白名单只允许这些既有 transaction alias。
+- production code 中 `AccountTransactionManager`、`VerificationRecordTransactionManager`、
+  `AsyncTaskRecordTransactionManager` 已清空。
+- business service 级 `runTransaction()` 已清空。
 - 新增 `*.port.ts` / `*.ports.ts` 文件、import 或 transaction alias 会被 ESLint 拦截。
-- P3a/P3b 再决定是否迁移 transaction context。
+- usecase 通过 `TransactionRunner` 持有事务入口，modules 对外只接收 transaction context。
 
 ### Cross-Domain Modules
 
