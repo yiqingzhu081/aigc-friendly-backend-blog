@@ -47,8 +47,12 @@ performs an automatic `--fix` pass.
 
 - `local-architecture/no-infrastructure-to-modules-imports`
   Blocks infrastructure importing `src/modules/**` implementation files.
-  Module-owned contract exceptions are not modeled in the old project yet; if module-owned contracts
-  are introduced, update this rule and this document together.
+  Module-owned `*.contract.ts` files are allowed as boundary-contract exceptions.
+
+- `local-architecture/no-cross-domain-modules-imports`
+  Blocks business-domain modules importing other business-domain modules.
+  Allows business-domain modules importing `src/modules/common/*`.
+  Blocks `src/modules/common/*` importing business-domain modules.
 
 - `local-architecture/no-cross-domain-usecases-imports`
   Blocks usecases importing other usecase bounded contexts.
@@ -82,12 +86,11 @@ performs an automatic `--fix` pass.
 
 These rules are documented review rules in the current project unless and until matching lint rules are added:
 
-- Module-owned `*.contract.ts` exceptions and detailed contract dependency modeling.
+- Detailed module-owned `*.contract.ts` dependency modeling inside `boundaries/dependencies`.
 - Aggregate child-entity direct writes outside the aggregate root entry.
 - ORM Entity purity, including accidental GraphQL / HTTP / Swagger / adapter decorators.
 - Adapter type-only import exceptions for bounded-context root `*.types.ts`.
 - QueryService depending on mixed read/write services.
-- Cross-domain modules imports.
 - Infrastructure runtime contract naming drift such as BullMQ payload files using layer boundary
   `*.contract.ts` naming.
 

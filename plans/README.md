@@ -88,8 +88,9 @@ direction -> plan -> docs / followup -> delete
 
 ## 当前计划
 
-- [layered-governance-alignment-plan.md](./layered-governance-alignment-plan.md)
+- 暂无。
 
 ## 已收口背景
 
 - [account-generic-identity-plan.md](./account-generic-identity-plan.md)
+- [layered-governance-alignment-plan.md](./layered-governance-alignment-plan.md)

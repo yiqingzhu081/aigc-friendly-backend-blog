@@ -108,7 +108,7 @@
 
 当前产出：
 
-- [layered-governance-p0-inventory.md](./layered-governance-p0-inventory.md)
+- 阶段性 inventory 已并入本计划摘要，临时文件已删除，避免继续引用过期状态。
 
 目标：先准确知道旧项目和新项目在治理文档、规则入口、验证方式上的差距。
 
@@ -214,7 +214,7 @@ P0 决策闸口：
 
 当前产出：
 
-- [layered-governance-p2-validation.md](./layered-governance-p2-validation.md)
+- 阶段性 validation 已并入本计划摘要，临时文件已删除，避免继续引用过期状态。
 - `eslint.config.mjs` 已参考新项目 local architecture lint，迁入可安全落地的规则。
 - `docs/common/eslint-architecture-rules.md` 已更新自动覆盖、legacy 白名单、补充扫描命令与人工
   review 边界。
@@ -224,9 +224,7 @@ P0 决策闸口：
 - `npm run typecheck` 通过。
 - `npx eslint "{src,apps,libs,test}/**/*.ts" --cache --cache-location .eslintcache` 通过。
 - `git diff --check` 通过。
-- 额外执行 `npm run lint:usecase-normalize-guard`，当前因既有
-  `src/usecases/account/fetch-user-info.usecase.ts` 手工 filter / Set 去重失败。
-  该问题不是 P2 新增架构 lint 导致，已记录到 P2 validation，后续可单独收口。
+- 额外执行 `npm run lint:usecase-normalize-guard` 通过。
 
 目标：让旧项目的可执行验证方式和新项目治理文档一致。
 
@@ -251,7 +249,7 @@ P0 决策闸口：
 
 当前产出：
 
-- [layered-governance-p3a-inventory.md](./layered-governance-p3a-inventory.md)
+- 阶段性 inventory 已并入本计划摘要，临时文件已删除，避免继续引用过期状态。
 
 目标：按对齐后的新项目规则，先盘点旧项目实际代码里的分层违规，不在本阶段扩大修复范围。
 
@@ -348,7 +346,7 @@ P0 决策闸口：
   `account.query.service.ts`，且 `permission.query.service.ts` 已删除。
 - third-party-auth entity 搜索仅命中 `src/modules/third-party-auth/**` 与测试引用。
 - boundary port 扫描不再命中 core legacy `.ports.ts` 文件或 imports。
-- business modules 跨域扫描排除 `.spec.ts` 后只剩 business -> `modules/common` 的允许依赖。
+- business modules 跨域依赖已由 ESLint 生产代码规则覆盖；测试文件按新项目口径豁免该规则。
 - transaction alias / service `runTransaction` 扫描不再命中生产代码。
 - `npm run typecheck` 通过。
 - `npx eslint "{src,apps,libs,test}/**/*.ts" --cache --cache-location .eslintcache` 通过。
@@ -356,8 +354,7 @@ P0 决策闸口：
   通过。
 - `npm run test:e2e:file -- 01-auth/auth.e2e-spec.ts` 通过。
 - `npm run test:e2e:file -- 07-pagination-sort-search/pagination.e2e-spec.ts` 通过。
-- `npm run migration:drill:empty-db` 已尝试；当前 E2E DB 用户缺少 `CREATE/DROP DATABASE`
-  权限，脚本要求授予权限或设置 `MIGRATION_DRILL_DATABASE` 指向预置空库后再验证。
+- `MIGRATION_DRILL_DATABASE=edu_platform_test npm run migration:drill:empty-db` 通过。
 
 目标：按 P3a inventory 分批修复旧项目实际代码里的分层违规。
 
@@ -379,14 +376,18 @@ P0 决策闸口：
 
 ### P4：收口与归档
 
+状态：已完成。
+
 目标：让分层治理对齐成为旧项目稳定基线。
 
 产出物：
 
 - 本计划记录 P0-P3b 完成状态。
-- 若发现长期治理尾项，拆到单独 followup。
-- 若某些边界暂时只能人工 review，在 `docs/common/eslint-architecture-rules.md` 明确。
+- 未发现需要拆出的长期治理尾项。
+- `docs/common/eslint-architecture-rules.md` 已明确当前自动覆盖与仍需人工 review 的边界。
 - 数据库表名单数化已作为最后治理尾项收口。
+- `eslint.config.mjs` 已补 `no-cross-domain-modules-imports`，防止业务域 modules 互相依赖或
+  `modules/common` 反向依赖业务域。
 
 验收：
 

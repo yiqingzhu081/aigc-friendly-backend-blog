@@ -14,6 +14,7 @@ const MODULES_ROOT = path.join(PROJECT_ROOT, 'src', 'modules');
 const TYPES_ROOT = path.join(PROJECT_ROOT, 'src', 'types');
 const USECASES_ROOT = path.join(PROJECT_ROOT, 'src', 'usecases');
 const SRC_ROOT = path.join(PROJECT_ROOT, 'src');
+const MODULE_BOUNDARY_CONTRACT_FILE_PATH_PATTERN = /(^|[/\\])[^/\\]+\.contract(?:\.ts)?$/;
 
 const TRANSACTION_MANAGER_ORM_METHODS = new Set([
   'createQueryBuilder',
@@ -75,6 +76,20 @@ function isUsecaseBoundaryContract(filePath) {
   return (
     relative.startsWith(`common${path.sep}`) &&
     (relative.endsWith('.contract') || relative.endsWith('.contract.ts'))
+  );
+}
+
+function getModuleScope(filePath) {
+  if (!isPathInside(filePath, MODULES_ROOT)) return null;
+  const [scope] = path.relative(MODULES_ROOT, filePath).split(path.sep);
+  return scope && scope !== '..' ? scope : null;
+}
+
+function isModuleBoundaryContractFilePath(filePath) {
+  const resolved = path.resolve(filePath);
+  return (
+    isPathInside(resolved, MODULES_ROOT) &&
+    MODULE_BOUNDARY_CONTRACT_FILE_PATH_PATTERN.test(resolved)
   );
 }
 
@@ -274,6 +289,7 @@ const localArchitecturePlugin = {
         if (!isPathInside(context.filename, INFRASTRUCTURE_ROOT)) return {};
         function checkImport(node, specifier, targetPath) {
           if (!isPathInside(targetPath, MODULES_ROOT)) return;
+          if (isModuleBoundaryContractFilePath(targetPath)) return;
           context.report({
             node,
             message:
@@ -298,6 +314,54 @@ const localArchitecturePlugin = {
           ImportExpression(node) {
             visitDynamicImport(context, node, (specifier, targetPath) =>
               checkImport(node, specifier, targetPath),
+            );
+          },
+        };
+      },
+    },
+    'no-cross-domain-modules-imports': {
+      meta: { type: 'problem', schema: [] },
+      create(context) {
+        const fromScope = getModuleScope(context.filename);
+        if (!fromScope) return {};
+        function checkCrossDomain(node, specifier, targetPath) {
+          if (!isPathInside(targetPath, MODULES_ROOT)) return;
+          const toScope = getModuleScope(targetPath);
+          if (!toScope || toScope === fromScope) return;
+          if (fromScope !== 'common' && toScope === 'common') return;
+          if (fromScope === 'common') {
+            context.report({
+              node,
+              message:
+                'modules/common 是受限共享层，禁止反向依赖业务域模块 "{{toScope}}"。契约应下沉到 core，绑定留在业务模块。当前 import: "{{specifier}}"',
+              data: { fromScope, specifier, toScope },
+            });
+            return;
+          }
+          context.report({
+            node,
+            message:
+              '业务域 modules 禁止跨域依赖；当前从 "{{fromScope}}" 依赖了 "{{toScope}}"。如需跨域读取请走 QueryService 契约上提或经 usecase 编排。当前 import: "{{specifier}}"',
+            data: { fromScope, specifier, toScope },
+          });
+        }
+        function reportIfNeeded(node) {
+          visitImportLike(context, node, (specifier, targetPath) =>
+            checkCrossDomain(node, specifier, targetPath),
+          );
+        }
+        return {
+          ImportDeclaration: reportIfNeeded,
+          ExportNamedDeclaration: reportIfNeeded,
+          ExportAllDeclaration: reportIfNeeded,
+          CallExpression(node) {
+            visitRequire(context, node, (specifier, targetPath) =>
+              checkCrossDomain(node, specifier, targetPath),
+            );
+          },
+          ImportExpression(node) {
+            visitDynamicImport(context, node, (specifier, targetPath) =>
+              checkCrossDomain(node, specifier, targetPath),
             );
           },
         };
@@ -569,6 +633,7 @@ export default defineConfig(
       'local-architecture/no-transaction-manager-alias': 'error',
       'local-architecture/no-usecase-transaction-manager-orm-api': 'error',
       'local-architecture/no-infrastructure-to-modules-imports': 'error',
+      'local-architecture/no-cross-domain-modules-imports': 'error',
       'local-architecture/no-cross-domain-usecases-imports': 'error',
       'local-architecture/no-types-to-core-imports': 'error',
       '@typescript-eslint/no-explicit-any': 'error',
@@ -652,6 +717,7 @@ export default defineConfig(
   {
     files: ['test/**/*.ts', '**/*.spec.ts', '**/*.test.ts', 'e2e/**/*.ts'],
     rules: {
+      complexity: 'off',
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
       'max-lines-per-function': 'off',
@@ -661,6 +727,8 @@ export default defineConfig(
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-non-null-assertion': 'off',
       '@typescript-eslint/explicit-module-boundary-types': 'off',
+      '@typescript-eslint/unbound-method': 'off',
+      'local-architecture/no-cross-domain-modules-imports': 'off',
       'no-console': 'off',
     },
   },
