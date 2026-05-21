@@ -5,12 +5,12 @@ import type { AiProviderClient } from '@core/ai/ai-provider.interface';
 import { LocalMockAiProvider } from '@src/infrastructure/ai/providers/local/local-mock-ai.provider';
 import { OpenAiGenerateProvider } from '@src/infrastructure/ai/providers/openai/openai-generate.provider';
 import { QwenGenerateProvider } from '@src/infrastructure/ai/providers/qwen/qwen-generate.provider';
-import { AI_WORKER_TOKENS, type AiProviderRegistryOptions } from '../ai-worker.tokens';
+import { AI_PROVIDER_REGISTRY_OPTIONS, type AiProviderRegistryOptions } from '../ai-worker.options';
 
 @Injectable()
 export class AiProviderRegistry {
   constructor(
-    @Inject(AI_WORKER_TOKENS.PROVIDER_REGISTRY_OPTIONS)
+    @Inject(AI_PROVIDER_REGISTRY_OPTIONS)
     private readonly options: AiProviderRegistryOptions,
     private readonly localMockProvider: LocalMockAiProvider,
     private readonly openAiGenerateProvider: OpenAiGenerateProvider,

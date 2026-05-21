@@ -2,16 +2,16 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EmailDeliveryService } from './email-delivery.service';
-import { EMAIL_WORKER_TOKENS, type EmailDeliveryOptions } from './email-worker.tokens';
+import { EMAIL_DELIVERY_OPTIONS, type EmailDeliveryOptions } from './email-worker.options';
 
 @Module({
   providers: [
     {
-      provide: EMAIL_WORKER_TOKENS.DELIVERY_OPTIONS,
+      provide: EMAIL_DELIVERY_OPTIONS,
       inject: [ConfigService],
       useFactory: (configService: ConfigService): EmailDeliveryOptions => ({
-        runAsUser: configService.get<string>('EMAIL_SEND_AS_USER')?.trim() || undefined,
-        sendmailPath: '/usr/sbin/sendmail',
+        runAsUser: configService.get<string>('emailDelivery.sendAsUser'),
+        sendmailPath: configService.get<string>('emailDelivery.sendmailPath', '/usr/sbin/sendmail'),
       }),
     },
     EmailDeliveryService,

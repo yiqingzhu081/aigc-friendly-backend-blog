@@ -3,14 +3,14 @@ import { Inject, Injectable } from '@nestjs/common';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { PinoLogger } from 'nestjs-pino';
-import { EMAIL_WORKER_TOKENS, type EmailDeliveryOptions } from './email-worker.tokens';
+import { EMAIL_DELIVERY_OPTIONS, type EmailDeliveryOptions } from './email-worker.options';
 import type { SendEmailInput, SendEmailResult } from './email-worker.types';
 
 @Injectable()
 export class EmailDeliveryService {
   constructor(
     private readonly logger: PinoLogger,
-    @Inject(EMAIL_WORKER_TOKENS.DELIVERY_OPTIONS)
+    @Inject(EMAIL_DELIVERY_OPTIONS)
     private readonly options: EmailDeliveryOptions,
   ) {
     this.logger.setContext(EmailDeliveryService.name);

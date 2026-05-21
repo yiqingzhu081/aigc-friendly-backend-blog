@@ -428,6 +428,13 @@ const aiWorkerConfig: ConfigFactory = () => ({
   },
 });
 
+const emailDeliveryConfig: ConfigFactory = () => ({
+  emailDelivery: {
+    sendAsUser: getOptionalEnv('EMAIL_SEND_AS_USER'),
+    sendmailPath: getOptionalEnv('EMAIL_SENDMAIL_PATH') ?? '/usr/sbin/sendmail',
+  },
+});
+
 /**
  * 生成 JWT 配置
  */
@@ -477,6 +484,7 @@ const paginationConfig = () => ({
         bullmqConfig,
         qmWorkerEntryConfig,
         aiWorkerConfig,
+        emailDeliveryConfig,
         jwtConfig,
         paginationConfig,
       ],

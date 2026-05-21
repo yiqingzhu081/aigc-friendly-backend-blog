@@ -25,3 +25,4 @@ Source of truth: This file defines email worker delivery rules; code examples el
 ## 配置约定
 
 - EMAIL_SEND_AS_USER：可选，用于以指定系统用户执行 sendmail。
+- EMAIL_SENDMAIL_PATH：可选，用于指定 sendmail 命令路径；默认 `/usr/sbin/sendmail`。
