@@ -1,7 +1,7 @@
 // src/infrastructure/bullmq/contracts/job-contract.registry.ts
 import { BULLMQ_JOBS, BULLMQ_QUEUES, type BullMqQueueName } from '../bullmq.constants';
-import { AI_JOB_CONTRACT } from './ai.contract';
-import { EMAIL_JOB_CONTRACT } from './email.contract';
+import { AI_JOB_CONTRACT } from './ai-queue.runtime';
+import { EMAIL_JOB_CONTRACT } from './email-queue.runtime';
 
 type PayloadValidator<T> = (payload: unknown) => payload is T;
 

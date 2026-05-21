@@ -1,6 +1,6 @@
-// src/modules/common/password/password-integration.spec.ts
-import { AccountService } from '@modules/account/base/services/account.service';
+// src/modules/account/base/services/password-integration.spec.ts
 import { LegacyPasswordCryptoHelper } from '@modules/common/password/legacy-password-crypto.helper';
+import { AccountService } from './account.service';
 
 describe('密码预处理与 PBKDF2 哈希集成测试', () => {
   describe('NFKC 标准化集成', () => {

@@ -86,8 +86,8 @@ Source of truth: This file defines QM worker integration rules; code examples el
   - 参考：`src/infrastructure/bullmq/bullmq.constants.ts`
   - 参考：`src/infrastructure/bullmq/contracts/job-contract.registry.ts`
   - 参考：`src/infrastructure/bullmq/queue-registry.ts`
-  - 当前 `src/infrastructure/bullmq/contracts/*.contract.ts` 属于 runtime naming legacy。
-    后续新增 runtime contract 文件优先使用 `*.runtime.ts`、`*.payload.ts` 或 `*.registry.ts`。
+  - Runtime contract 文件使用 `*.runtime.ts`、`*.payload.ts` 或 `*.registry.ts`，不得使用
+    layer boundary contract 的 `*.contract.ts` 后缀。
 - 审计记录
   - 统一走 Async Task Record Service，不单独造表。
   - 参考：`src/usecases/ai-queue/queue-ai.usecase.ts`

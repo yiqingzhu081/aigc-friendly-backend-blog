@@ -1,5 +1,5 @@
 // src/modules/common/ai-queue/ai-queue.types.ts
-import type { AiProvider } from '@src/infrastructure/bullmq/contracts/ai.contract';
+import type { AiProvider } from '@app-types/common/ai-provider.types';
 
 export interface QueueAiGenerateInput {
   readonly provider?: AiProvider;

@@ -1,5 +1,6 @@
 // src/adapters/api/graphql/ai/dto/queue-ai-generate.input.ts
 import { trimText } from '@core/common/text/text.helper';
+import { AI_PROVIDERS, type AiProvider } from '@app-types/common/ai-provider.types';
 import { Field, InputType } from '@nestjs/graphql';
 import { Transform, TransformFnParams } from 'class-transformer';
 import {
@@ -13,9 +14,6 @@ import {
 } from 'class-validator';
 import GraphQLJSON from 'graphql-type-json';
 
-type AiProviderInput = 'openai' | 'qwen';
-const AI_PROVIDERS: ReadonlyArray<AiProviderInput> = ['openai', 'qwen'];
-
 @InputType()
 export class QueueAiGenerateInput {
   @Field(() => String, { nullable: true, description: 'AI 提供方' })
@@ -24,7 +22,7 @@ export class QueueAiGenerateInput {
   @IsString({ message: 'AI 提供方必须是字符串' })
   @IsIn(AI_PROVIDERS, { message: 'AI 提供方不在允许范围内' })
   @MaxLength(32, { message: 'AI 提供方长度不能超过 32 个字符' })
-  provider?: AiProviderInput;
+  provider?: AiProvider;
 
   @Field(() => String, { description: '模型名称' })
   @Transform(({ value }: TransformFnParams) => trimText(value))

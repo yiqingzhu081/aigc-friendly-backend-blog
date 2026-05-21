@@ -1,4 +1,4 @@
-// src/infrastructure/bullmq/contracts/email.contract.ts
+// src/infrastructure/bullmq/contracts/email-queue.runtime.ts
 import { BULLMQ_JOBS, BULLMQ_QUEUES } from '../bullmq.constants';
 import {
   isNonEmptyString,

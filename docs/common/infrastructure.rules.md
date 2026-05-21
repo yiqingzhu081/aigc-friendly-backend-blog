@@ -49,8 +49,6 @@ For boundary contract naming, see docs/common/boundary-contract.rules.md.
   它们不得作为 adapters / usecases / modules 复用业务类型的权威来源。
 - Infrastructure runtime contract 文件不得使用 `*.contract.ts` 后缀；优先使用 `*.runtime.ts`、
   `*.payload.ts` 或 `*.registry.ts`，避免和 layer boundary contract 混淆。
-- 当前 `src/infrastructure/bullmq/contracts/*.contract.ts` 属于 runtime naming legacy。
-  只允许必要维护；新增 runtime contract 文件应使用 `*.runtime.ts`、`*.payload.ts` 或 `*.registry.ts`。
 - 细粒度、可替换、可测试的技术实现。
 - 保持实现可观测性与可恢复性。
 - Infrastructure 中的实现只依赖被实现的 boundary contract、必要的纯类型与底层技术组件。

@@ -1,4 +1,6 @@
-// src/infrastructure/bullmq/contracts/ai.contract.ts
+// src/infrastructure/bullmq/contracts/ai-queue.runtime.ts
+import { AI_PROVIDERS, type AiProvider } from '@app-types/common/ai-provider.types';
+
 import { BULLMQ_JOBS, BULLMQ_QUEUES } from '../bullmq.constants';
 import {
   isNonEmptyString,
@@ -6,8 +8,6 @@ import {
   isOptionalRecordOfString,
   isRecord,
 } from './shared-payload-validators';
-
-export type AiProvider = 'openai' | 'qwen';
 
 export interface AiGeneratePayload {
   readonly provider?: AiProvider;
@@ -61,8 +61,6 @@ export interface AiEmbedResult {
   readonly providerStartedAt?: Date | null;
   readonly providerFinishedAt?: Date | null;
 }
-
-const AI_PROVIDERS: ReadonlyArray<AiProvider> = ['openai', 'qwen'];
 
 const isAiProvider = (value: string): value is AiProvider => {
   return AI_PROVIDERS.some((provider) => provider === value);
