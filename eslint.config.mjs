@@ -23,7 +23,6 @@ const MODULES_CONTRACTS_ELEMENT_PATTERNS = [
 ];
 // Keep this in sync with MODULES_CONTRACTS_ELEMENT_PATTERNS.
 const MODULE_BOUNDARY_CONTRACT_FILE_PATH_PATTERN = /(^|[/\\])[^/\\]+\.contract(?:\.ts)?$/;
-
 const TRANSACTION_MANAGER_ORM_METHODS = new Set([
   'createQueryBuilder',
   'delete',
@@ -34,13 +33,54 @@ const TRANSACTION_MANAGER_ORM_METHODS = new Set([
   'update',
 ]);
 
+/**
+ * @param {string} targetPath
+ * @param {string} rootPath
+ * @returns {boolean}
+ */
 function isPathInside(targetPath, rootPath) {
   const relative = path.relative(rootPath, targetPath);
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
 
+/**
+ * @param {string} filePath
+ * @returns {boolean}
+ */
+function isBoundaryPortFilePath(filePath) {
+  return /\.ports?\.ts$/.test(filePath);
+}
+
+/**
+ * @param {import('estree').Node} node
+ * @returns {string | null}
+ */
+function getStaticPropertyName(node) {
+  if (node.type !== 'MemberExpression') {
+    return null;
+  }
+  if (!node.computed && node.property.type === 'Identifier') {
+    return node.property.name;
+  }
+  if (
+    node.computed &&
+    node.property.type === 'Literal' &&
+    typeof node.property.value === 'string'
+  ) {
+    return node.property.value;
+  }
+  return null;
+}
+
+/**
+ * @param {string} fromFile
+ * @param {string} specifier
+ * @returns {string | null}
+ */
 function resolveInternalImport(fromFile, specifier) {
-  if (specifier.startsWith('.')) return path.resolve(path.dirname(fromFile), specifier);
+  if (specifier.startsWith('.')) {
+    return path.resolve(path.dirname(fromFile), specifier);
+  }
   if (specifier.startsWith('@src/')) {
     return path.resolve(PROJECT_ROOT, 'src', specifier.slice('@src/'.length));
   }
@@ -59,27 +99,32 @@ function resolveInternalImport(fromFile, specifier) {
   if (specifier.startsWith('@usecases/')) {
     return path.resolve(PROJECT_ROOT, 'src', 'usecases', specifier.slice('@usecases/'.length));
   }
-  if (specifier.startsWith('src/')) return path.resolve(PROJECT_ROOT, specifier);
-  return null;
-}
-
-function getStaticPropertyName(node) {
-  if (node.type !== 'MemberExpression') return null;
-  if (!node.computed && node.property.type === 'Identifier') return node.property.name;
-  if (node.computed && node.property.type === 'Literal' && typeof node.property.value === 'string') {
-    return node.property.value;
+  if (specifier.startsWith('src/')) {
+    return path.resolve(PROJECT_ROOT, specifier);
   }
   return null;
 }
 
+/**
+ * @param {string} filePath
+ * @returns {string | null}
+ */
 function getUsecaseScope(filePath) {
-  if (!isPathInside(filePath, USECASES_ROOT)) return null;
+  if (!isPathInside(filePath, USECASES_ROOT)) {
+    return null;
+  }
   const [scope] = path.relative(USECASES_ROOT, filePath).split(path.sep);
   return scope && scope !== '..' ? scope : null;
 }
 
+/**
+ * @param {string} filePath
+ * @returns {boolean}
+ */
 function isUsecaseBoundaryContract(filePath) {
-  if (!isPathInside(filePath, USECASES_ROOT)) return false;
+  if (!isPathInside(filePath, USECASES_ROOT)) {
+    return false;
+  }
   const relative = path.relative(USECASES_ROOT, filePath);
   return (
     relative.startsWith(`common${path.sep}`) &&
@@ -87,12 +132,25 @@ function isUsecaseBoundaryContract(filePath) {
   );
 }
 
+/**
+ * @param {string} filePath
+ * @returns {string | null}
+ */
 function getModuleScope(filePath) {
-  if (!isPathInside(filePath, MODULES_ROOT)) return null;
+  if (!isPathInside(filePath, MODULES_ROOT)) {
+    return null;
+  }
   const [scope] = path.relative(MODULES_ROOT, filePath).split(path.sep);
   return scope && scope !== '..' ? scope : null;
 }
 
+/**
+ * Must stay aligned with the boundaries plugin modules-contracts element
+ * patterns above so local architecture rules and boundaries/dependencies
+ * agree on which module files are boundary contracts.
+ * @param {string} filePath
+ * @returns {boolean}
+ */
 function isModuleBoundaryContractFilePath(filePath) {
   const resolved = path.resolve(filePath);
   return (
@@ -101,36 +159,87 @@ function isModuleBoundaryContractFilePath(filePath) {
   );
 }
 
-function visitImportLike(context, node, visitor) {
+/**
+ * @param {import('eslint').Rule.RuleContext} context
+ * @param {import('estree').Node & { source?: { value?: unknown } }} node
+ * @param {(specifier: string, targetPath: string) => void} onResolvedImport
+ * @returns {void}
+ */
+function checkStaticImportLikeNode(context, node, onResolvedImport) {
   const specifier = typeof node.source?.value === 'string' ? node.source.value : null;
-  if (!specifier) return;
-  const targetPath = resolveInternalImport(context.filename, specifier);
-  if (!targetPath) return;
-  visitor(specifier, targetPath);
+  if (!specifier) {
+    return;
+  }
+  const fromFile = context.filename;
+  const targetPath = resolveInternalImport(fromFile, specifier);
+  if (!targetPath) {
+    return;
+  }
+  onResolvedImport(specifier, targetPath);
 }
 
-function visitRequire(context, node, visitor) {
-  if (node.callee.type !== 'Identifier' || node.callee.name !== 'require') return;
+/**
+ * @param {import('eslint').Rule.RuleContext} context
+ * @param {import('estree').CallExpression} node
+ * @param {(specifier: string, targetPath: string) => void} onResolvedImport
+ * @returns {void}
+ */
+function checkRequireCallNode(context, node, onResolvedImport) {
+  if (node.callee.type !== 'Identifier' || node.callee.name !== 'require') {
+    return;
+  }
   const firstArg = node.arguments[0];
-  if (!firstArg || firstArg.type !== 'Literal' || typeof firstArg.value !== 'string') return;
-  const targetPath = resolveInternalImport(context.filename, firstArg.value);
-  if (!targetPath) return;
-  visitor(firstArg.value, targetPath);
+  if (!firstArg || firstArg.type !== 'Literal' || typeof firstArg.value !== 'string') {
+    return;
+  }
+  const specifier = firstArg.value;
+  const fromFile = context.filename;
+  const targetPath = resolveInternalImport(fromFile, specifier);
+  if (!targetPath) {
+    return;
+  }
+  onResolvedImport(specifier, targetPath);
 }
 
-function visitDynamicImport(context, node, visitor) {
-  if (node.source.type !== 'Literal' || typeof node.source.value !== 'string') return;
-  const targetPath = resolveInternalImport(context.filename, node.source.value);
-  if (!targetPath) return;
-  visitor(node.source.value, targetPath);
+/**
+ * @param {import('eslint').Rule.RuleContext} context
+ * @param {import('estree').ImportExpression} node
+ * @param {(specifier: string, targetPath: string) => void} onResolvedImport
+ * @returns {void}
+ */
+function checkImportExpressionNode(context, node, onResolvedImport) {
+  if (node.source.type !== 'Literal' || typeof node.source.value !== 'string') {
+    return;
+  }
+  const specifier = node.source.value;
+  const fromFile = context.filename;
+  const targetPath = resolveInternalImport(fromFile, specifier);
+  if (!targetPath) {
+    return;
+  }
+  onResolvedImport(specifier, targetPath);
 }
 
 const localArchitecturePlugin = {
   rules: {
     'no-boundary-port-naming-drift': {
-      meta: { type: 'problem', schema: [] },
+      meta: {
+        type: /** @type {const} */ ('problem'),
+        docs: {
+          description:
+            'disallow new *.port.ts/*.ports.ts boundary files and parallel transaction contract names',
+        },
+        schema: [],
+      },
+      /** @param {import('eslint').Rule.RuleContext} context */
       create(context) {
-        function reportPortImportIfNeeded(node, specifier) {
+        /**
+         * @param {import('estree').Node} node
+         * @param {string} specifier
+         * @param {string} targetPath
+         * @returns {void}
+         */
+        function reportPortImportIfNeeded(node, specifier, targetPath) {
           if (specifier.includes('transaction-runner.port')) {
             context.report({
               node,
@@ -139,42 +248,67 @@ const localArchitecturePlugin = {
             });
             return;
           }
-          if (!/(^|\/)[^/]+\.ports?(?:\.ts)?$/.test(specifier)) return;
+          if (!/(^|\/)[^/]+\.ports?(?:\.ts)?$/.test(specifier)) {
+            return;
+          }
           context.report({
             node,
             message:
-              '新增 boundary contract 文件使用 *.contract.ts；禁止新增或导入 *.port.ts / *.ports.ts。',
+              '新增 boundary contract 文件使用 *.contract.ts；禁止新增或导入 *.port.ts / *.ports.ts。当前 import: "{{specifier}}"',
+            data: { specifier },
           });
         }
+
         return {
+          /** @param {import('estree').Program} node */
           Program(node) {
-            if (!isPathInside(context.filename, SRC_ROOT)) return;
-            if (!/\.ports?\.ts$/.test(context.filename)) return;
+            if (!isPathInside(context.filename, SRC_ROOT)) {
+              return;
+            }
+            if (!isBoundaryPortFilePath(context.filename)) {
+              return;
+            }
             context.report({
               node,
               message:
                 '新增 boundary contract 文件使用 *.contract.ts；禁止新增 *.port.ts / *.ports.ts。',
             });
           },
+          /** @param {import('estree').ImportDeclaration} node */
           ImportDeclaration(node) {
-            visitImportLike(context, node, (specifier) => reportPortImportIfNeeded(node, specifier));
+            checkStaticImportLikeNode(context, node, (specifier, targetPath) => {
+              reportPortImportIfNeeded(node, specifier, targetPath);
+            });
           },
-          ExportNamedDeclaration(node) {
-            visitImportLike(context, node, (specifier) => reportPortImportIfNeeded(node, specifier));
-          },
+          /** @param {import('estree').ExportAllDeclaration} node */
           ExportAllDeclaration(node) {
-            visitImportLike(context, node, (specifier) => reportPortImportIfNeeded(node, specifier));
+            checkStaticImportLikeNode(context, node, (specifier, targetPath) => {
+              reportPortImportIfNeeded(node, specifier, targetPath);
+            });
           },
+          /** @param {import('estree').Node & { source?: { value?: unknown } }} node */
+          ExportNamedDeclaration(node) {
+            checkStaticImportLikeNode(context, node, (specifier, targetPath) => {
+              reportPortImportIfNeeded(node, specifier, targetPath);
+            });
+          },
+          /** @param {import('estree').CallExpression} node */
           CallExpression(node) {
-            visitRequire(context, node, (specifier) => reportPortImportIfNeeded(node, specifier));
+            checkRequireCallNode(context, node, (specifier, targetPath) => {
+              reportPortImportIfNeeded(node, specifier, targetPath);
+            });
           },
+          /** @param {import('estree').ImportExpression} node */
           ImportExpression(node) {
-            visitDynamicImport(context, node, (specifier) =>
-              reportPortImportIfNeeded(node, specifier),
-            );
+            checkImportExpressionNode(context, node, (specifier, targetPath) => {
+              reportPortImportIfNeeded(node, specifier, targetPath);
+            });
           },
+          /** @param {import('estree').Identifier} node */
           Identifier(node) {
-            if (node.name !== 'TransactionPort' && node.name !== 'UnitOfWork') return;
+            if (node.name !== 'TransactionPort' && node.name !== 'UnitOfWork') {
+              return;
+            }
             context.report({
               node,
               message:
@@ -185,7 +319,14 @@ const localArchitecturePlugin = {
       },
     },
     'no-transaction-manager-alias': {
-      meta: { type: 'problem', schema: [] },
+      meta: {
+        type: /** @type {const} */ ('problem'),
+        docs: {
+          description: 'disallow local *TransactionManager aliases in usecases and modules',
+        },
+        schema: [],
+      },
+      /** @param {import('eslint').Rule.RuleContext} context */
       create(context) {
         if (
           !isPathInside(context.filename, MODULES_ROOT) &&
@@ -194,16 +335,27 @@ const localArchitecturePlugin = {
           return {};
         }
         return {
+          /** @param {import('@typescript-eslint/types').TSESTree.TSTypeAliasDeclaration} node */
           TSTypeAliasDeclaration(node) {
-            if (!node.id.name.endsWith('TransactionManager')) return;
+            const aliasName = node.id.name;
+            if (typeof aliasName !== 'string' || !aliasName.endsWith('TransactionManager')) {
+              return;
+            }
             context.report({
               node,
               message:
                 '禁止新增本地 *TransactionManager alias；usecase 使用 PersistenceTransactionContext，modules(service) / QueryService 对外接收 transactionContext。',
             });
           },
+          /** @param {import('@typescript-eslint/types').TSESTree.TSInterfaceDeclaration} node */
           TSInterfaceDeclaration(node) {
-            if (!node.id.name.endsWith('TransactionManager')) return;
+            const interfaceName = node.id.name;
+            if (
+              typeof interfaceName !== 'string' ||
+              !interfaceName.endsWith('TransactionManager')
+            ) {
+              return;
+            }
             context.report({
               node,
               message:
@@ -214,27 +366,61 @@ const localArchitecturePlugin = {
       },
     },
     'no-usecase-transaction-manager-orm-api': {
-      meta: { type: 'problem', schema: [] },
+      meta: {
+        type: /** @type {const} */ ('problem'),
+        docs: {
+          description: 'disallow usecases directly calling ORM APIs on transaction contexts',
+        },
+        schema: [],
+      },
+      /** @param {import('eslint').Rule.RuleContext} context */
       create(context) {
-        if (!isPathInside(context.filename, USECASES_ROOT)) return {};
+        if (!isPathInside(context.filename, USECASES_ROOT)) {
+          return {};
+        }
         const transactionContextNames = new Set();
         const sourceCode = context.sourceCode;
+
+        /**
+         * @param {import('estree').Node} node
+         * @returns {boolean}
+         */
         function textMentionsTransactionContextType(node) {
           return /\b(?:PersistenceTransactionContext|TransactionManager|EntityManager)\b/.test(
             sourceCode.getText(node),
           );
         }
+
+        /**
+         * @param {import('estree').Pattern | import('estree').Node} node
+         * @returns {void}
+         */
         function rememberTypedIdentifier(node) {
           if (node.type === 'Identifier') {
-            if (node.typeAnnotation && textMentionsTransactionContextType(node.typeAnnotation)) {
-              transactionContextNames.add(node.name);
+            const id = /** @type {import('@typescript-eslint/types').TSESTree.Identifier} */ (node);
+            if (
+              id.typeAnnotation &&
+              textMentionsTransactionContextType(
+                /** @type {import('estree').Node} */ (/** @type {unknown} */ (id.typeAnnotation)),
+              )
+            ) {
+              transactionContextNames.add(id.name);
               return;
             }
           }
-          if (node.type === 'AssignmentPattern') rememberTypedIdentifier(node.left);
+          if (node.type === 'AssignmentPattern') {
+            rememberTypedIdentifier(node.left);
+          }
         }
+
+        /**
+         * @param {import('estree').Node} node
+         * @returns {boolean}
+         */
         function isTransactionContextLikeExpression(node) {
-          if (node.type === 'ChainExpression') return isTransactionContextLikeExpression(node.expression);
+          if (node.type === 'ChainExpression') {
+            return isTransactionContextLikeExpression(node.expression);
+          }
           if (node.type === 'Identifier') {
             const lowerName = node.name.toLowerCase();
             return (
@@ -247,9 +433,13 @@ const localArchitecturePlugin = {
               lowerName === 'transactionmanager'
             );
           }
-          if (node.type !== 'MemberExpression') return false;
+          if (node.type !== 'MemberExpression') {
+            return false;
+          }
           const propertyName = getStaticPropertyName(node);
-          if (!propertyName) return false;
+          if (!propertyName) {
+            return false;
+          }
           const lowerPropertyName = propertyName.toLowerCase();
           return (
             lowerPropertyName === 'transactioncontext' ||
@@ -260,78 +450,329 @@ const localArchitecturePlugin = {
             lowerPropertyName === 'transactionmanager'
           );
         }
+
+        /**
+         * @param {import('estree').Function} node
+         * @returns {void}
+         */
         function rememberFunctionParams(node) {
-          for (const param of node.params) rememberTypedIdentifier(param);
+          for (const param of node.params) {
+            rememberTypedIdentifier(param);
+          }
         }
+
         return {
           FunctionDeclaration: rememberFunctionParams,
           FunctionExpression: rememberFunctionParams,
           ArrowFunctionExpression: rememberFunctionParams,
+          /** @param {import('estree').VariableDeclarator} node */
           VariableDeclarator(node) {
-            if (node.id.type !== 'Identifier') return;
-            if (node.id.typeAnnotation && textMentionsTransactionContextType(node.id.typeAnnotation)) {
-              transactionContextNames.add(node.id.name);
+            if (node.id.type !== 'Identifier') {
+              return;
+            }
+            const id = /** @type {import('@typescript-eslint/types').TSESTree.Identifier} */ (
+              node.id
+            );
+            if (
+              id.typeAnnotation &&
+              textMentionsTransactionContextType(
+                /** @type {import('estree').Node} */ (/** @type {unknown} */ (id.typeAnnotation)),
+              )
+            ) {
+              transactionContextNames.add(id.name);
               return;
             }
             if (node.init && textMentionsTransactionContextType(node.init)) {
-              transactionContextNames.add(node.id.name);
+              transactionContextNames.add(id.name);
             }
           },
+          /** @param {import('estree').CallExpression} node */
           CallExpression(node) {
-            if (node.callee.type !== 'MemberExpression') return;
+            if (node.callee.type !== 'MemberExpression') {
+              return;
+            }
             const methodName = getStaticPropertyName(node.callee);
-            if (!methodName || !TRANSACTION_MANAGER_ORM_METHODS.has(methodName)) return;
-            if (!isTransactionContextLikeExpression(node.callee.object)) return;
+            if (!methodName || !TRANSACTION_MANAGER_ORM_METHODS.has(methodName)) {
+              return;
+            }
+            if (!isTransactionContextLikeExpression(node.callee.object)) {
+              return;
+            }
             context.report({
               node: node.callee,
               message:
-                'Usecase 只能传递 transaction context，不得直接调用事务上下文的 ORM API。',
+                'Usecase 只能传递 transaction context，不得直接调用事务上下文的 ORM API "{{methodName}}"；请下沉到 modules service / QueryService / repository 封装。',
+              data: { methodName },
             });
           },
         };
       },
     },
     'no-infrastructure-to-modules-imports': {
-      meta: { type: 'problem', schema: [] },
+      meta: {
+        type: /** @type {const} */ ('problem'),
+        docs: {
+          description: 'disallow infrastructure importing modules',
+        },
+        schema: [],
+      },
+      /** @param {import('eslint').Rule.RuleContext} context */
       create(context) {
-        if (!isPathInside(context.filename, INFRASTRUCTURE_ROOT)) return {};
-        function checkImport(node, specifier, targetPath) {
-          if (!isPathInside(targetPath, MODULES_ROOT)) return;
-          if (isModuleBoundaryContractFilePath(targetPath)) return;
-          context.report({
-            node,
-            message:
-              'Infrastructure 层禁止依赖 modules 实现；仅允许依赖 module-owned boundary contract。',
-            data: { specifier },
+        if (!isPathInside(context.filename, INFRASTRUCTURE_ROOT)) {
+          return {};
+        }
+
+        /**
+         * @param {import('estree').Node & { source?: { value?: unknown } }} node
+         * @returns {void}
+         */
+        function reportIfNeeded(node) {
+          checkStaticImportLikeNode(context, node, (specifier, targetPath) => {
+            if (
+              !isPathInside(targetPath, MODULES_ROOT) ||
+              isModuleBoundaryContractFilePath(targetPath)
+            ) {
+              return;
+            }
+            context.report({
+              node,
+              message:
+                'Infrastructure 层禁止依赖 modules 实现；仅允许依赖 module-owned boundary contract。当前 import: "{{specifier}}"',
+              data: { specifier },
+            });
           });
         }
-        function reportIfNeeded(node) {
-          visitImportLike(context, node, (specifier, targetPath) =>
-            checkImport(node, specifier, targetPath),
-          );
-        }
+
         return {
           ImportDeclaration: reportIfNeeded,
-          ExportNamedDeclaration: reportIfNeeded,
           ExportAllDeclaration: reportIfNeeded,
+          ExportNamedDeclaration: reportIfNeeded,
+          /** @param {import('estree').CallExpression} node */
           CallExpression(node) {
-            visitRequire(context, node, (specifier, targetPath) =>
-              checkImport(node, specifier, targetPath),
-            );
+            checkRequireCallNode(context, node, (specifier, targetPath) => {
+              if (
+                !isPathInside(targetPath, MODULES_ROOT) ||
+                isModuleBoundaryContractFilePath(targetPath)
+              ) {
+                return;
+              }
+              context.report({
+                node,
+                message:
+                  'Infrastructure 层禁止依赖 modules 实现；仅允许依赖 module-owned boundary contract。当前 import: "{{specifier}}"',
+                data: { specifier },
+              });
+            });
           },
+          /** @param {import('estree').ImportExpression} node */
           ImportExpression(node) {
-            visitDynamicImport(context, node, (specifier, targetPath) =>
-              checkImport(node, specifier, targetPath),
-            );
+            checkImportExpressionNode(context, node, (specifier, targetPath) => {
+              if (
+                !isPathInside(targetPath, MODULES_ROOT) ||
+                isModuleBoundaryContractFilePath(targetPath)
+              ) {
+                return;
+              }
+              context.report({
+                node,
+                message:
+                  'Infrastructure 层禁止依赖 modules 实现；仅允许依赖 module-owned boundary contract。当前 import: "{{specifier}}"',
+                data: { specifier },
+              });
+            });
+          },
+        };
+      },
+    },
+    'no-cross-domain-usecases-imports': {
+      meta: {
+        type: /** @type {const} */ ('problem'),
+        docs: {
+          description: 'disallow cross-domain imports inside usecases',
+        },
+        schema: [],
+      },
+      /** @param {import('eslint').Rule.RuleContext} context */
+      create(context) {
+        const fromScope = getUsecaseScope(context.filename);
+        if (!fromScope) {
+          return {};
+        }
+
+        /**
+         * @param {import('estree').Node & { source?: { value?: unknown } }} node
+         * @returns {void}
+         */
+        function reportIfNeeded(node) {
+          checkStaticImportLikeNode(context, node, (specifier, targetPath) => {
+            if (!isPathInside(targetPath, USECASES_ROOT)) {
+              return;
+            }
+            if (isUsecaseBoundaryContract(targetPath)) {
+              return;
+            }
+            const toScope = getUsecaseScope(targetPath);
+            if (!toScope || toScope === fromScope) {
+              return;
+            }
+            context.report({
+              node,
+              message:
+                'Usecase 层仅允许同域依赖；当前从 "{{fromScope}}" 依赖了 "{{toScope}}"。当前 import: "{{specifier}}"',
+              data: {
+                fromScope,
+                specifier,
+                toScope,
+              },
+            });
+          });
+        }
+
+        return {
+          ImportDeclaration: reportIfNeeded,
+          ExportAllDeclaration: reportIfNeeded,
+          ExportNamedDeclaration: reportIfNeeded,
+          /** @param {import('estree').CallExpression} node */
+          CallExpression(node) {
+            checkRequireCallNode(context, node, (specifier, targetPath) => {
+              if (!isPathInside(targetPath, USECASES_ROOT)) {
+                return;
+              }
+              if (isUsecaseBoundaryContract(targetPath)) {
+                return;
+              }
+              const toScope = getUsecaseScope(targetPath);
+              if (!toScope || toScope === fromScope) {
+                return;
+              }
+              context.report({
+                node,
+                message:
+                  'Usecase 层仅允许同域依赖；当前从 "{{fromScope}}" 依赖了 "{{toScope}}"。当前 import: "{{specifier}}"',
+                data: {
+                  fromScope,
+                  specifier,
+                  toScope,
+                },
+              });
+            });
+          },
+          /** @param {import('estree').ImportExpression} node */
+          ImportExpression(node) {
+            checkImportExpressionNode(context, node, (specifier, targetPath) => {
+              if (!isPathInside(targetPath, USECASES_ROOT)) {
+                return;
+              }
+              if (isUsecaseBoundaryContract(targetPath)) {
+                return;
+              }
+              const toScope = getUsecaseScope(targetPath);
+              if (!toScope || toScope === fromScope) {
+                return;
+              }
+              context.report({
+                node,
+                message:
+                  'Usecase 层仅允许同域依赖；当前从 "{{fromScope}}" 依赖了 "{{toScope}}"。当前 import: "{{specifier}}"',
+                data: {
+                  fromScope,
+                  specifier,
+                  toScope,
+                },
+              });
+            });
+          },
+        };
+      },
+    },
+    'no-types-to-core-imports': {
+      meta: {
+        type: /** @type {const} */ ('problem'),
+        docs: {
+          description: 'disallow types layer importing core layer',
+        },
+        schema: [],
+      },
+      /** @param {import('eslint').Rule.RuleContext} context */
+      create(context) {
+        if (!isPathInside(context.filename, TYPES_ROOT)) {
+          return {};
+        }
+
+        /**
+         * @param {import('estree').Node & { source?: { value?: unknown } }} node
+         * @returns {void}
+         */
+        function reportIfNeeded(node) {
+          checkStaticImportLikeNode(context, node, (specifier, targetPath) => {
+            if (!isPathInside(targetPath, CORE_ROOT)) {
+              return;
+            }
+            context.report({
+              node,
+              message:
+                'Types 层禁止依赖 core；types 是最底层共享契约，不应包含领域实现语义。当前 import: "{{specifier}}"',
+              data: { specifier },
+            });
+          });
+        }
+
+        return {
+          ImportDeclaration: reportIfNeeded,
+          ExportAllDeclaration: reportIfNeeded,
+          ExportNamedDeclaration: reportIfNeeded,
+          /** @param {import('estree').CallExpression} node */
+          CallExpression(node) {
+            checkRequireCallNode(context, node, (specifier, targetPath) => {
+              if (!isPathInside(targetPath, CORE_ROOT)) {
+                return;
+              }
+              context.report({
+                node,
+                message:
+                  'Types 层禁止依赖 core；types 是最底层共享契约，不应包含领域实现语义。当前 import: "{{specifier}}"',
+                data: { specifier },
+              });
+            });
+          },
+          /** @param {import('estree').ImportExpression} node */
+          ImportExpression(node) {
+            checkImportExpressionNode(context, node, (specifier, targetPath) => {
+              if (!isPathInside(targetPath, CORE_ROOT)) {
+                return;
+              }
+              context.report({
+                node,
+                message:
+                  'Types 层禁止依赖 core；types 是最底层共享契约，不应包含领域实现语义。当前 import: "{{specifier}}"',
+                data: { specifier },
+              });
+            });
           },
         };
       },
     },
     'no-cross-domain-modules-imports': {
-      meta: { type: 'problem', schema: [] },
+      meta: {
+        type: /** @type {const} */ ('problem'),
+        docs: {
+          description:
+            'enforce three-tier module dependency matrix: business→common allowed, common→business forbidden, business→business forbidden',
+        },
+        schema: [],
+      },
+      /** @param {import('eslint').Rule.RuleContext} context */
       create(context) {
         const fromScope = getModuleScope(context.filename);
-        if (!fromScope) return {};
+        if (!fromScope) {
+          return {};
+        }
+
+        /**
+         * @param {import('estree').Node} node
+         * @param {string} specifier
+         * @param {string} targetPath
+         */
         function checkCrossDomain(node, specifier, targetPath) {
           if (!isPathInside(targetPath, MODULES_ROOT)) return;
           const toScope = getModuleScope(targetPath);
@@ -353,96 +794,29 @@ const localArchitecturePlugin = {
             data: { fromScope, specifier, toScope },
           });
         }
+
+        /** @param {import('estree').Node & { source?: { value?: unknown } }} node */
         function reportIfNeeded(node) {
-          visitImportLike(context, node, (specifier, targetPath) =>
-            checkCrossDomain(node, specifier, targetPath),
-          );
-        }
-        return {
-          ImportDeclaration: reportIfNeeded,
-          ExportNamedDeclaration: reportIfNeeded,
-          ExportAllDeclaration: reportIfNeeded,
-          CallExpression(node) {
-            visitRequire(context, node, (specifier, targetPath) =>
-              checkCrossDomain(node, specifier, targetPath),
-            );
-          },
-          ImportExpression(node) {
-            visitDynamicImport(context, node, (specifier, targetPath) =>
-              checkCrossDomain(node, specifier, targetPath),
-            );
-          },
-        };
-      },
-    },
-    'no-cross-domain-usecases-imports': {
-      meta: { type: 'problem', schema: [] },
-      create(context) {
-        const fromScope = getUsecaseScope(context.filename);
-        if (!fromScope) return {};
-        function checkImport(node, specifier, targetPath) {
-          if (!isPathInside(targetPath, USECASES_ROOT)) return;
-          if (isUsecaseBoundaryContract(targetPath)) return;
-          const toScope = getUsecaseScope(targetPath);
-          if (!toScope || toScope === fromScope) return;
-          context.report({
-            node,
-            message: 'Usecase 层仅允许同域依赖；禁止跨 usecase bounded context import。',
-            data: { fromScope, specifier, toScope },
+          checkStaticImportLikeNode(context, node, (specifier, targetPath) => {
+            checkCrossDomain(node, specifier, targetPath);
           });
         }
-        function reportIfNeeded(node) {
-          visitImportLike(context, node, (specifier, targetPath) =>
-            checkImport(node, specifier, targetPath),
-          );
-        }
+
         return {
           ImportDeclaration: reportIfNeeded,
-          ExportNamedDeclaration: reportIfNeeded,
           ExportAllDeclaration: reportIfNeeded,
-          CallExpression(node) {
-            visitRequire(context, node, (specifier, targetPath) =>
-              checkImport(node, specifier, targetPath),
-            );
-          },
-          ImportExpression(node) {
-            visitDynamicImport(context, node, (specifier, targetPath) =>
-              checkImport(node, specifier, targetPath),
-            );
-          },
-        };
-      },
-    },
-    'no-types-to-core-imports': {
-      meta: { type: 'problem', schema: [] },
-      create(context) {
-        if (!isPathInside(context.filename, TYPES_ROOT)) return {};
-        function checkImport(node, specifier, targetPath) {
-          if (!isPathInside(targetPath, CORE_ROOT)) return;
-          context.report({
-            node,
-            message: 'Types 层禁止依赖 core；types 是最底层共享契约。',
-            data: { specifier },
-          });
-        }
-        function reportIfNeeded(node) {
-          visitImportLike(context, node, (specifier, targetPath) =>
-            checkImport(node, specifier, targetPath),
-          );
-        }
-        return {
-          ImportDeclaration: reportIfNeeded,
           ExportNamedDeclaration: reportIfNeeded,
-          ExportAllDeclaration: reportIfNeeded,
+          /** @param {import('estree').CallExpression} node */
           CallExpression(node) {
-            visitRequire(context, node, (specifier, targetPath) =>
-              checkImport(node, specifier, targetPath),
-            );
+            checkRequireCallNode(context, node, (specifier, targetPath) => {
+              checkCrossDomain(node, specifier, targetPath);
+            });
           },
+          /** @param {import('estree').ImportExpression} node */
           ImportExpression(node) {
-            visitDynamicImport(context, node, (specifier, targetPath) =>
-              checkImport(node, specifier, targetPath),
-            );
+            checkImportExpressionNode(context, node, (specifier, targetPath) => {
+              checkCrossDomain(node, specifier, targetPath);
+            });
           },
         };
       },
@@ -472,7 +846,9 @@ export default defineConfig(
   },
   {
     plugins: {
-      boundaries: eslintPluginBoundaries,
+      boundaries: /** @type {import('eslint').ESLint.Plugin} */ (
+        /** @type {unknown} */ (eslintPluginBoundaries)
+      ),
       'local-architecture': localArchitecturePlugin,
     },
     settings: {
@@ -829,13 +1205,13 @@ export default defineConfig(
           ],
         },
       ],
+      'local-architecture/no-infrastructure-to-modules-imports': 'error',
+      'local-architecture/no-cross-domain-usecases-imports': 'error',
+      'local-architecture/no-types-to-core-imports': 'error',
+      'local-architecture/no-cross-domain-modules-imports': 'error',
       'local-architecture/no-boundary-port-naming-drift': 'error',
       'local-architecture/no-transaction-manager-alias': 'error',
       'local-architecture/no-usecase-transaction-manager-orm-api': 'error',
-      'local-architecture/no-infrastructure-to-modules-imports': 'error',
-      'local-architecture/no-cross-domain-modules-imports': 'error',
-      'local-architecture/no-cross-domain-usecases-imports': 'error',
-      'local-architecture/no-types-to-core-imports': 'error',
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-floating-promises': 'error',
       '@typescript-eslint/no-unsafe-argument': 'error',
