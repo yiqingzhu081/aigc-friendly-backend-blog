@@ -3,7 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { BLOG_ERROR } from '../../blog.errors';
-import type { CategoryView, CreateCategoryInput, UpdateCategoryInput } from '../../blog.types';
+import type { CategorySnapshot, CreateCategoryInput, UpdateCategoryInput } from '../../blog.types';
 import { CategoryEntity } from '../entities/category.entity';
 
 @Injectable()
@@ -13,7 +13,7 @@ export class CategoryService {
     private readonly categoryRepository: Repository<CategoryEntity>,
   ) {}
 
-  async createCategory(input: CreateCategoryInput): Promise<CategoryEntity> {
+  async createCategory(input: CreateCategoryInput): Promise<CategorySnapshot> {
     const slug = input.slug || this.generateSlug(input.name);
 
     const existingSlug = await this.categoryRepository.findOne({ where: { slug } });
@@ -36,10 +36,11 @@ export class CategoryService {
       sortOrder: input.sortOrder || 0,
     });
 
-    return this.categoryRepository.save(category);
+    const saved = await this.categoryRepository.save(category);
+    return this.toCategorySnapshot(saved);
   }
 
-  async updateCategory(id: string, input: UpdateCategoryInput): Promise<CategoryEntity> {
+  async updateCategory(id: string, input: UpdateCategoryInput): Promise<CategorySnapshot> {
     const category = await this.categoryRepository.findOne({ where: { id } });
     if (!category) {
       throw new DomainError(BLOG_ERROR.CATEGORY_NOT_FOUND, '分类不存在');
@@ -69,7 +70,8 @@ export class CategoryService {
     }
     if (input.sortOrder !== undefined) category.sortOrder = input.sortOrder;
 
-    return this.categoryRepository.save(category);
+    const saved = await this.categoryRepository.save(category);
+    return this.toCategorySnapshot(saved);
   }
 
   async deleteCategory(id: string): Promise<boolean> {
@@ -80,7 +82,7 @@ export class CategoryService {
 
     const hasChildren = await this.categoryRepository.exists({ where: { parentId: id } });
     if (hasChildren) {
-      throw new DomainError(BLOG_ERROR.CATEGORY_NOT_FOUND, '该分类下有子分类，无法删除');
+      throw new DomainError(BLOG_ERROR.CATEGORY_HAS_CHILDREN, '该分类下有子分类，无法删除');
     }
 
     await this.categoryRepository.delete(id);
@@ -92,5 +94,18 @@ export class CategoryService {
       .toLowerCase()
       .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '-')
       .replace(/^-|-$/g, '');
+  }
+
+  private toCategorySnapshot(category: CategoryEntity): CategorySnapshot {
+    return {
+      id: category.id,
+      name: category.name,
+      slug: category.slug,
+      description: category.description,
+      parentId: category.parentId,
+      sortOrder: category.sortOrder,
+      createdAt: category.createdAt,
+      updatedAt: category.updatedAt,
+    };
   }
 }

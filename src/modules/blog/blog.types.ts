@@ -90,6 +90,17 @@ export interface CategoryView {
   updatedAt: Date;
 }
 
+export interface CategorySnapshot {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  parentId: string | null;
+  sortOrder: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface CategoryTreeNode {
   id: string;
   name: string;
