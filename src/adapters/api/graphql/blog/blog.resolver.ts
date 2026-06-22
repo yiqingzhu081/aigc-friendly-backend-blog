@@ -17,7 +17,21 @@ import { DeleteCategoryUsecase } from '@src/usecases/blog/delete-category.usecas
 import { GetCategoryUsecase } from '@src/usecases/blog/get-category.usecase';
 import { ListCategoriesUsecase } from '@src/usecases/blog/list-categories.usecase';
 import { GetCategoryTreeUsecase } from '@src/usecases/blog/get-category-tree.usecase';
-import type { CategoryView, CategoryTreeNode, PostView } from '@src/modules/blog/blog.types';
+import { CreateTagUsecase } from '@src/usecases/blog/create-tag.usecase';
+import { UpdateTagUsecase } from '@src/usecases/blog/update-tag.usecase';
+import { DeleteTagUsecase } from '@src/usecases/blog/delete-tag.usecase';
+import { GetTagUsecase } from '@src/usecases/blog/get-tag.usecase';
+import { ListTagsUsecase } from '@src/usecases/blog/list-tags.usecase';
+import { GetPopularTagsUsecase } from '@src/usecases/blog/get-popular-tags.usecase';
+import { AddTagsToPostUsecase } from '@src/usecases/blog/add-tags-to-post.usecase';
+import { RemoveTagsFromPostUsecase } from '@src/usecases/blog/remove-tags-from-post.usecase';
+import type {
+  CategoryView,
+  CategoryTreeNode,
+  PostView,
+  TagView,
+  TagWithCount,
+} from '@src/modules/blog/blog.types';
 import { CreatePostInput } from './dto/create-post.input';
 import { PostConnection } from './dto/post-connection.dto';
 import { PostDto } from './dto/post.dto';
@@ -27,6 +41,10 @@ import { CategoryDto } from './dto/category.dto';
 import { CategoryTreeNodeDto } from './dto/category-tree-node.dto';
 import { CreateCategoryInput } from './dto/create-category.input';
 import { UpdateCategoryInput } from './dto/update-category.input';
+import { TagDto } from './dto/tag.dto';
+import { TagWithCountDto } from './dto/tag-with-count.dto';
+import { CreateTagInput } from './dto/create-tag.input';
+import { UpdateTagInput } from './dto/update-tag.input';
 
 @Resolver()
 export class BlogResolver {
@@ -48,6 +66,14 @@ export class BlogResolver {
     private readonly getCategoryUsecase: GetCategoryUsecase,
     private readonly listCategoriesUsecase: ListCategoriesUsecase,
     private readonly getCategoryTreeUsecase: GetCategoryTreeUsecase,
+    private readonly createTagUsecase: CreateTagUsecase,
+    private readonly updateTagUsecase: UpdateTagUsecase,
+    private readonly deleteTagUsecase: DeleteTagUsecase,
+    private readonly getTagUsecase: GetTagUsecase,
+    private readonly listTagsUsecase: ListTagsUsecase,
+    private readonly getPopularTagsUsecase: GetPopularTagsUsecase,
+    private readonly addTagsToPostUsecase: AddTagsToPostUsecase,
+    private readonly removeTagsFromPostUsecase: RemoveTagsFromPostUsecase,
   ) {}
 
   @Query(() => PostConnection, { description: '文章列表查询（支持分页）' })
@@ -342,6 +368,93 @@ export class BlogResolver {
       sortOrder: item.sortOrder,
       postCount: item.postCount,
       children: item.children.map((child) => this.toCategoryTreeNodeDto(child)),
+    };
+  }
+
+  @Query(() => [TagDto], { description: '标签列表' })
+  @ValidateInput()
+  async tags(): Promise<TagDto[]> {
+    const result = await this.listTagsUsecase.execute();
+    return result.map((item) => this.toTagDto(item));
+  }
+
+  @Query(() => TagDto, { nullable: true, description: '查询单个标签' })
+  @ValidateInput()
+  async tag(@Args('id') id: string): Promise<TagDto | null> {
+    const result = await this.getTagUsecase.execute(id);
+    return result ? this.toTagDto(result) : null;
+  }
+
+  @Query(() => [TagWithCountDto], { description: '热门标签（按文章数量排序）' })
+  @ValidateInput()
+  async popularTags(@Args('limit', { nullable: true }) limit?: number): Promise<TagWithCountDto[]> {
+    const result = await this.getPopularTagsUsecase.execute(limit || 10);
+    return result.map((item) => this.toTagWithCountDto(item));
+  }
+
+  @Mutation(() => TagDto, { description: '创建标签' })
+  @ValidateInput()
+  async createTag(@Args('input') input: CreateTagInput): Promise<TagDto> {
+    const result = await this.createTagUsecase.execute({
+      name: input.name,
+      slug: input.slug,
+    });
+    return this.toTagDto(result);
+  }
+
+  @Mutation(() => TagDto, { description: '更新标签' })
+  @ValidateInput()
+  async updateTag(@Args('id') id: string, @Args('input') input: UpdateTagInput): Promise<TagDto> {
+    const result = await this.updateTagUsecase.execute(id, {
+      name: input.name,
+      slug: input.slug,
+    });
+    return this.toTagDto(result);
+  }
+
+  @Mutation(() => Boolean, { description: '删除标签' })
+  @ValidateInput()
+  async deleteTag(@Args('id') id: string): Promise<boolean> {
+    return this.deleteTagUsecase.execute(id);
+  }
+
+  @Mutation(() => PostDto, { description: '为文章添加标签' })
+  @ValidateInput()
+  async addTagsToPost(
+    @Args('postId') postId: string,
+    @Args({ name: 'tagIds', type: () => [String] }) tagIds: string[],
+  ): Promise<PostDto> {
+    const result = await this.addTagsToPostUsecase.execute(postId, tagIds);
+    return this.toPostDto(result);
+  }
+
+  @Mutation(() => PostDto, { description: '从文章移除标签' })
+  @ValidateInput()
+  async removeTagsFromPost(
+    @Args('postId') postId: string,
+    @Args({ name: 'tagIds', type: () => [String] }) tagIds: string[],
+  ): Promise<PostDto> {
+    const result = await this.removeTagsFromPostUsecase.execute(postId, tagIds);
+    return this.toPostDto(result);
+  }
+
+  private toTagDto(item: TagView): TagDto {
+    return {
+      id: item.id,
+      name: item.name,
+      slug: item.slug,
+      postCount: item.postCount,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    };
+  }
+
+  private toTagWithCountDto(item: TagWithCount): TagWithCountDto {
+    return {
+      id: item.id,
+      name: item.name,
+      slug: item.slug,
+      count: item.count,
     };
   }
 }

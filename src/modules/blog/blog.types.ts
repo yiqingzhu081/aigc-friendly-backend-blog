@@ -126,3 +126,37 @@ export interface UpdateCategoryInput {
   parentId?: string | null;
   sortOrder?: number;
 }
+
+export interface TagView {
+  id: string;
+  name: string;
+  slug: string;
+  postCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface TagSnapshot {
+  id: string;
+  name: string;
+  slug: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface TagWithCount {
+  id: string;
+  name: string;
+  slug: string;
+  count: number;
+}
+
+export interface CreateTagInput {
+  name: string;
+  slug?: string;
+}
+
+export interface UpdateTagInput {
+  name?: string;
+  slug?: string;
+}

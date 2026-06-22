@@ -18,6 +18,14 @@ import { DeleteCategoryUsecase } from './delete-category.usecase';
 import { GetCategoryUsecase } from './get-category.usecase';
 import { ListCategoriesUsecase } from './list-categories.usecase';
 import { GetCategoryTreeUsecase } from './get-category-tree.usecase';
+import { CreateTagUsecase } from './create-tag.usecase';
+import { UpdateTagUsecase } from './update-tag.usecase';
+import { DeleteTagUsecase } from './delete-tag.usecase';
+import { GetTagUsecase } from './get-tag.usecase';
+import { ListTagsUsecase } from './list-tags.usecase';
+import { GetPopularTagsUsecase } from './get-popular-tags.usecase';
+import { AddTagsToPostUsecase } from './add-tags-to-post.usecase';
+import { RemoveTagsFromPostUsecase } from './remove-tags-from-post.usecase';
 
 @Module({
   imports: [BlogModule, RedisModule],
@@ -39,6 +47,14 @@ import { GetCategoryTreeUsecase } from './get-category-tree.usecase';
     GetCategoryUsecase,
     ListCategoriesUsecase,
     GetCategoryTreeUsecase,
+    CreateTagUsecase,
+    UpdateTagUsecase,
+    DeleteTagUsecase,
+    GetTagUsecase,
+    ListTagsUsecase,
+    GetPopularTagsUsecase,
+    AddTagsToPostUsecase,
+    RemoveTagsFromPostUsecase,
   ],
   exports: [
     CreatePostUsecase,
@@ -58,6 +74,14 @@ import { GetCategoryTreeUsecase } from './get-category-tree.usecase';
     GetCategoryUsecase,
     ListCategoriesUsecase,
     GetCategoryTreeUsecase,
+    CreateTagUsecase,
+    UpdateTagUsecase,
+    DeleteTagUsecase,
+    GetTagUsecase,
+    ListTagsUsecase,
+    GetPopularTagsUsecase,
+    AddTagsToPostUsecase,
+    RemoveTagsFromPostUsecase,
   ],
 })
 export class BlogUsecasesModule {}

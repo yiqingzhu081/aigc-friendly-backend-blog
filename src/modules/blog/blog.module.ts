@@ -9,8 +9,10 @@ import { PostEntity } from './base/entities/post.entity';
 import { TagEntity } from './base/entities/tag.entity';
 import { BlogService } from './base/services/blog.service';
 import { CategoryService } from './base/services/category.service';
+import { TagService } from './base/services/tag.service';
 import { BlogQueryService } from './queries/blog.query.service';
 import { CategoryQueryService } from './queries/category.query.service';
+import { TagQueryService } from './queries/tag.query.service';
 
 @Module({})
 export class BlogModule {
@@ -28,8 +30,8 @@ export class BlogModule {
           FileEntity,
         ]),
       ],
-      providers: [BlogService, CategoryService, BlogQueryService, CategoryQueryService],
-      exports: [TypeOrmModule, BlogService, CategoryService, BlogQueryService, CategoryQueryService],
+      providers: [BlogService, CategoryService, TagService, BlogQueryService, CategoryQueryService, TagQueryService],
+      exports: [TypeOrmModule, BlogService, CategoryService, TagService, BlogQueryService, CategoryQueryService, TagQueryService],
     };
   }
 }
