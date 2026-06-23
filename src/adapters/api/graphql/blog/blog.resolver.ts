@@ -25,9 +25,17 @@ import { ListTagsUsecase } from '@src/usecases/blog/list-tags.usecase';
 import { GetPopularTagsUsecase } from '@src/usecases/blog/get-popular-tags.usecase';
 import { AddTagsToPostUsecase } from '@src/usecases/blog/add-tags-to-post.usecase';
 import { RemoveTagsFromPostUsecase } from '@src/usecases/blog/remove-tags-from-post.usecase';
+import { CreateCommentUsecase } from '@src/usecases/blog/create-comment.usecase';
+import { UpdateCommentUsecase } from '@src/usecases/blog/update-comment.usecase';
+import { DeleteCommentUsecase } from '@src/usecases/blog/delete-comment.usecase';
+import { GetCommentUsecase } from '@src/usecases/blog/get-comment.usecase';
+import { ListCommentsUsecase } from '@src/usecases/blog/list-comments.usecase';
+import { ReplyToCommentUsecase } from '@src/usecases/blog/reply-to-comment.usecase';
 import type {
   CategoryView,
   CategoryTreeNode,
+  CommentTreeNode,
+  CommentView,
   PostView,
   TagView,
   TagWithCount,
@@ -45,6 +53,10 @@ import { TagDto } from './dto/tag.dto';
 import { TagWithCountDto } from './dto/tag-with-count.dto';
 import { CreateTagInput } from './dto/create-tag.input';
 import { UpdateTagInput } from './dto/update-tag.input';
+import { CommentDto } from './dto/comment.dto';
+import { CommentTreeNodeDto } from './dto/comment-tree-node.dto';
+import { CreateCommentInput } from './dto/create-comment.input';
+import { UpdateCommentInput } from './dto/update-comment.input';
 
 @Resolver()
 export class BlogResolver {
@@ -74,6 +86,12 @@ export class BlogResolver {
     private readonly getPopularTagsUsecase: GetPopularTagsUsecase,
     private readonly addTagsToPostUsecase: AddTagsToPostUsecase,
     private readonly removeTagsFromPostUsecase: RemoveTagsFromPostUsecase,
+    private readonly createCommentUsecase: CreateCommentUsecase,
+    private readonly updateCommentUsecase: UpdateCommentUsecase,
+    private readonly deleteCommentUsecase: DeleteCommentUsecase,
+    private readonly getCommentUsecase: GetCommentUsecase,
+    private readonly listCommentsUsecase: ListCommentsUsecase,
+    private readonly replyToCommentUsecase: ReplyToCommentUsecase,
   ) {}
 
   @Query(() => PostConnection, { description: '文章列表查询（支持分页）' })
@@ -455,6 +473,102 @@ export class BlogResolver {
       name: item.name,
       slug: item.slug,
       count: item.count,
+    };
+  }
+
+  @Query(() => [CommentTreeNodeDto], { description: '评论列表（树形结构）' })
+  @ValidateInput()
+  async comments(@Args('postId') postId: string): Promise<CommentTreeNodeDto[]> {
+    const result = await this.listCommentsUsecase.execute(postId);
+    return result.map((item) => this.toCommentTreeNodeDto(item));
+  }
+
+  @Query(() => CommentDto, { nullable: true, description: '查询单个评论' })
+  @ValidateInput()
+  async comment(@Args('id') id: string): Promise<CommentDto | null> {
+    const result = await this.getCommentUsecase.execute(id);
+    return this.toCommentDto(result);
+  }
+
+  @Mutation(() => CommentDto, { description: '创建评论' })
+  @ValidateInput()
+  async createComment(@Args('input') input: CreateCommentInput): Promise<CommentDto> {
+    const result = await this.createCommentUsecase.execute({
+      postId: input.postId,
+      parentId: input.parentId,
+      authorName: input.authorName,
+      authorEmail: input.authorEmail,
+      content: input.content,
+    });
+    return this.toCommentDto(result);
+  }
+
+  @Mutation(() => CommentDto, { description: '更新评论' })
+  @ValidateInput()
+  async updateComment(
+    @Args('id') id: string,
+    @Args('input') input: UpdateCommentInput,
+  ): Promise<CommentDto> {
+    const result = await this.updateCommentUsecase.execute(id, {
+      content: input.content,
+      status: input.status,
+      rejectReason: input.rejectReason,
+    });
+    return this.toCommentDto(result);
+  }
+
+  @Mutation(() => Boolean, { description: '删除评论' })
+  @ValidateInput()
+  async deleteComment(@Args('id') id: string): Promise<boolean> {
+    return this.deleteCommentUsecase.execute(id);
+  }
+
+  @Mutation(() => CommentDto, { description: '回复评论' })
+  @ValidateInput()
+  async replyToComment(
+    @Args('id') id: string,
+    @Args('input') input: CreateCommentInput,
+  ): Promise<CommentDto> {
+    const result = await this.replyToCommentUsecase.execute(id, {
+      authorName: input.authorName,
+      authorEmail: input.authorEmail,
+      content: input.content,
+    });
+    return this.toCommentDto(result);
+  }
+
+  private toCommentDto(item: CommentView): CommentDto {
+    return {
+      id: item.id,
+      postId: item.postId,
+      parentId: item.parentId,
+      level: item.level,
+      authorName: item.authorName,
+      authorEmail: item.authorEmail,
+      authorAvatar: item.authorAvatar,
+      content: item.content,
+      status: item.status,
+      rejectReason: item.rejectReason,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    };
+  }
+
+  private toCommentTreeNodeDto(item: CommentTreeNode): CommentTreeNodeDto {
+    return {
+      id: item.id,
+      postId: item.postId,
+      parentId: item.parentId,
+      level: item.level,
+      authorName: item.authorName,
+      authorEmail: item.authorEmail,
+      authorAvatar: item.authorAvatar,
+      content: item.content,
+      status: item.status,
+      rejectReason: item.rejectReason,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+      children: item.children.map((child) => this.toCommentTreeNodeDto(child)),
     };
   }
 }

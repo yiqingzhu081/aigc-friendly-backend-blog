@@ -26,6 +26,12 @@ import { ListTagsUsecase } from './list-tags.usecase';
 import { GetPopularTagsUsecase } from './get-popular-tags.usecase';
 import { AddTagsToPostUsecase } from './add-tags-to-post.usecase';
 import { RemoveTagsFromPostUsecase } from './remove-tags-from-post.usecase';
+import { CreateCommentUsecase } from './create-comment.usecase';
+import { UpdateCommentUsecase } from './update-comment.usecase';
+import { DeleteCommentUsecase } from './delete-comment.usecase';
+import { GetCommentUsecase } from './get-comment.usecase';
+import { ListCommentsUsecase } from './list-comments.usecase';
+import { ReplyToCommentUsecase } from './reply-to-comment.usecase';
 
 @Module({
   imports: [BlogModule, RedisModule],
@@ -55,6 +61,12 @@ import { RemoveTagsFromPostUsecase } from './remove-tags-from-post.usecase';
     GetPopularTagsUsecase,
     AddTagsToPostUsecase,
     RemoveTagsFromPostUsecase,
+    CreateCommentUsecase,
+    UpdateCommentUsecase,
+    DeleteCommentUsecase,
+    GetCommentUsecase,
+    ListCommentsUsecase,
+    ReplyToCommentUsecase,
   ],
   exports: [
     CreatePostUsecase,
@@ -82,6 +94,12 @@ import { RemoveTagsFromPostUsecase } from './remove-tags-from-post.usecase';
     GetPopularTagsUsecase,
     AddTagsToPostUsecase,
     RemoveTagsFromPostUsecase,
+    CreateCommentUsecase,
+    UpdateCommentUsecase,
+    DeleteCommentUsecase,
+    GetCommentUsecase,
+    ListCommentsUsecase,
+    ReplyToCommentUsecase,
   ],
 })
 export class BlogUsecasesModule {}

@@ -160,3 +160,63 @@ export interface UpdateTagInput {
   name?: string;
   slug?: string;
 }
+
+export interface CommentView {
+  id: string;
+  postId: string;
+  parentId: string | null;
+  level: number;
+  authorName: string;
+  authorEmail: string;
+  authorAvatar: string | null;
+  content: string;
+  status: string;
+  rejectReason: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CommentTreeNode {
+  id: string;
+  postId: string;
+  parentId: string | null;
+  level: number;
+  authorName: string;
+  authorEmail: string;
+  authorAvatar: string | null;
+  content: string;
+  status: string;
+  rejectReason: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  children: CommentTreeNode[];
+}
+
+export interface CommentSnapshot {
+  id: string;
+  postId: string;
+  parentId: string | null;
+  level: number;
+  authorName: string;
+  authorEmail: string;
+  authorAvatar: string | null;
+  content: string;
+  status: string;
+  rejectReason: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreateCommentInput {
+  postId: string;
+  parentId?: string | null;
+  authorName: string;
+  authorEmail: string;
+  content: string;
+}
+
+export interface UpdateCommentInput {
+  content?: string;
+  status?: string;
+  rejectReason?: string;
+}
