@@ -81,6 +81,57 @@ export class CommentService {
     return true;
   }
 
+  async approveComment(id: string): Promise<CommentSnapshot> {
+    const comment = await this.commentRepository.findOne({ where: { id } });
+    if (!comment) {
+      throw new DomainError(BLOG_ERROR.COMMENT_NOT_FOUND, '评论不存在');
+    }
+
+    comment.status = CommentStatus.APPROVED;
+    comment.rejectReason = null;
+
+    const saved = await this.commentRepository.save(comment);
+    return this.toCommentSnapshot(saved);
+  }
+
+  async rejectComment(id: string, reason?: string): Promise<CommentSnapshot> {
+    const comment = await this.commentRepository.findOne({ where: { id } });
+    if (!comment) {
+      throw new DomainError(BLOG_ERROR.COMMENT_NOT_FOUND, '评论不存在');
+    }
+
+    comment.status = CommentStatus.REJECTED;
+    comment.rejectReason = reason || null;
+
+    const saved = await this.commentRepository.save(comment);
+    return this.toCommentSnapshot(saved);
+  }
+
+  async hideComment(id: string): Promise<CommentSnapshot> {
+    const comment = await this.commentRepository.findOne({ where: { id } });
+    if (!comment) {
+      throw new DomainError(BLOG_ERROR.COMMENT_NOT_FOUND, '评论不存在');
+    }
+
+    comment.status = CommentStatus.HIDDEN;
+
+    const saved = await this.commentRepository.save(comment);
+    return this.toCommentSnapshot(saved);
+  }
+
+  async showComment(id: string): Promise<CommentSnapshot> {
+    const comment = await this.commentRepository.findOne({ where: { id } });
+    if (!comment) {
+      throw new DomainError(BLOG_ERROR.COMMENT_NOT_FOUND, '评论不存在');
+    }
+
+    comment.status = CommentStatus.APPROVED;
+    comment.rejectReason = null;
+
+    const saved = await this.commentRepository.save(comment);
+    return this.toCommentSnapshot(saved);
+  }
+
   private generateGravatarUrl(email: string): string {
     const hash = crypto.createHash('md5').update(email.trim().toLowerCase()).digest('hex');
     return `https://www.gravatar.com/avatar/${hash}?s=80&d=identicon`;

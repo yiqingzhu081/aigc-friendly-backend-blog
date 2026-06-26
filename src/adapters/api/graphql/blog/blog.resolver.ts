@@ -31,6 +31,11 @@ import { DeleteCommentUsecase } from '@src/usecases/blog/delete-comment.usecase'
 import { GetCommentUsecase } from '@src/usecases/blog/get-comment.usecase';
 import { ListCommentsUsecase } from '@src/usecases/blog/list-comments.usecase';
 import { ReplyToCommentUsecase } from '@src/usecases/blog/reply-to-comment.usecase';
+import { ApproveCommentUsecase } from '@src/usecases/blog/approve-comment.usecase';
+import { RejectCommentUsecase } from '@src/usecases/blog/reject-comment.usecase';
+import { HideCommentUsecase } from '@src/usecases/blog/hide-comment.usecase';
+import { ShowCommentUsecase } from '@src/usecases/blog/show-comment.usecase';
+import { ListPendingCommentsUsecase } from '@src/usecases/blog/list-pending-comments.usecase';
 import type {
   CategoryView,
   CategoryTreeNode,
@@ -55,6 +60,7 @@ import { CreateTagInput } from './dto/create-tag.input';
 import { UpdateTagInput } from './dto/update-tag.input';
 import { CommentDto } from './dto/comment.dto';
 import { CommentTreeNodeDto } from './dto/comment-tree-node.dto';
+import { CommentConnection } from './dto/comment-connection.dto';
 import { CreateCommentInput } from './dto/create-comment.input';
 import { UpdateCommentInput } from './dto/update-comment.input';
 
@@ -92,6 +98,11 @@ export class BlogResolver {
     private readonly getCommentUsecase: GetCommentUsecase,
     private readonly listCommentsUsecase: ListCommentsUsecase,
     private readonly replyToCommentUsecase: ReplyToCommentUsecase,
+    private readonly approveCommentUsecase: ApproveCommentUsecase,
+    private readonly rejectCommentUsecase: RejectCommentUsecase,
+    private readonly hideCommentUsecase: HideCommentUsecase,
+    private readonly showCommentUsecase: ShowCommentUsecase,
+    private readonly listPendingCommentsUsecase: ListPendingCommentsUsecase,
   ) {}
 
   @Query(() => PostConnection, { description: '文章列表查询（支持分页）' })
@@ -569,6 +580,52 @@ export class BlogResolver {
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
       children: item.children.map((child) => this.toCommentTreeNodeDto(child)),
+    };
+  }
+
+  @Mutation(() => CommentDto, { description: '审核通过评论' })
+  @ValidateInput()
+  async approveComment(@Args('id') id: string): Promise<CommentDto> {
+    const result = await this.approveCommentUsecase.execute(id);
+    return this.toCommentDto(result);
+  }
+
+  @Mutation(() => CommentDto, { description: '驳回评论' })
+  @ValidateInput()
+  async rejectComment(
+    @Args('id') id: string,
+    @Args('reason', { nullable: true }) reason?: string,
+  ): Promise<CommentDto> {
+    const result = await this.rejectCommentUsecase.execute(id, reason);
+    return this.toCommentDto(result);
+  }
+
+  @Mutation(() => CommentDto, { description: '隐藏评论' })
+  @ValidateInput()
+  async hideComment(@Args('id') id: string): Promise<CommentDto> {
+    const result = await this.hideCommentUsecase.execute(id);
+    return this.toCommentDto(result);
+  }
+
+  @Mutation(() => CommentDto, { description: '显示评论' })
+  @ValidateInput()
+  async showComment(@Args('id') id: string): Promise<CommentDto> {
+    const result = await this.showCommentUsecase.execute(id);
+    return this.toCommentDto(result);
+  }
+
+  @Query(() => CommentConnection, { description: '待审核评论列表' })
+  @ValidateInput()
+  async pendingComments(
+    @Args('page', { nullable: true }) page?: number,
+    @Args('pageSize', { nullable: true }) pageSize?: number,
+  ): Promise<CommentConnection> {
+    const result = await this.listPendingCommentsUsecase.execute(page || 1, pageSize || 20);
+    return {
+      items: result.items.map((item) => this.toCommentDto(item)),
+      total: result.total,
+      page: result.page,
+      pageSize: result.pageSize,
     };
   }
 }

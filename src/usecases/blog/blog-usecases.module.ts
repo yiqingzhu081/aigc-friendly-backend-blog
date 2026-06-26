@@ -32,6 +32,11 @@ import { DeleteCommentUsecase } from './delete-comment.usecase';
 import { GetCommentUsecase } from './get-comment.usecase';
 import { ListCommentsUsecase } from './list-comments.usecase';
 import { ReplyToCommentUsecase } from './reply-to-comment.usecase';
+import { ApproveCommentUsecase } from './approve-comment.usecase';
+import { RejectCommentUsecase } from './reject-comment.usecase';
+import { HideCommentUsecase } from './hide-comment.usecase';
+import { ShowCommentUsecase } from './show-comment.usecase';
+import { ListPendingCommentsUsecase } from './list-pending-comments.usecase';
 
 @Module({
   imports: [BlogModule, RedisModule],
@@ -67,6 +72,11 @@ import { ReplyToCommentUsecase } from './reply-to-comment.usecase';
     GetCommentUsecase,
     ListCommentsUsecase,
     ReplyToCommentUsecase,
+    ApproveCommentUsecase,
+    RejectCommentUsecase,
+    HideCommentUsecase,
+    ShowCommentUsecase,
+    ListPendingCommentsUsecase,
   ],
   exports: [
     CreatePostUsecase,
@@ -100,6 +110,11 @@ import { ReplyToCommentUsecase } from './reply-to-comment.usecase';
     GetCommentUsecase,
     ListCommentsUsecase,
     ReplyToCommentUsecase,
+    ApproveCommentUsecase,
+    RejectCommentUsecase,
+    HideCommentUsecase,
+    ShowCommentUsecase,
+    ListPendingCommentsUsecase,
   ],
 })
 export class BlogUsecasesModule {}

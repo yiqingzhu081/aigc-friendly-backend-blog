@@ -5,7 +5,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { BLOG_ERROR } from '../blog.errors';
-import type { CommentTreeNode, CommentView } from '../blog.types';
+import type { CommentTreeNode, CommentView, PaginatedCommentsResult } from '../blog.types';
 import { CommentEntity, CommentStatus } from '../base/entities/comment.entity';
 
 @Injectable()
@@ -38,6 +38,27 @@ export class CommentQueryService {
       throw new DomainError(BLOG_ERROR.COMMENT_NOT_FOUND, '评论不存在');
     }
     return comment;
+  }
+
+  async getPendingComments(
+    page: number = 1,
+    pageSize: number = 20,
+  ): Promise<PaginatedCommentsResult> {
+    const skip = (page - 1) * pageSize;
+
+    const [comments, total] = await this.commentRepository.findAndCount({
+      where: { status: CommentStatus.PENDING },
+      order: { createdAt: 'DESC' },
+      skip,
+      take: pageSize,
+    });
+
+    return {
+      items: comments.map((comment) => this.toCommentView(comment)),
+      total,
+      page,
+      pageSize,
+    };
   }
 
   private buildCommentTree(comments: CommentEntity[]): CommentTreeNode[] {

@@ -220,3 +220,10 @@ export interface UpdateCommentInput {
   status?: string;
   rejectReason?: string;
 }
+
+export interface PaginatedCommentsResult {
+  items: CommentView[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
